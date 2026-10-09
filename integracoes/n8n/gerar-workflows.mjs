@@ -10,6 +10,29 @@ const ler = (caminho) => readFileSync(join(pasta, 'codigo', caminho), 'utf8');
 // mesclarDocx.js é um módulo CommonJS testado pelo Jest; no n8n entra como código solto.
 const mesclarDocx = ler('mesclarDocx.js').replace(/\nmodule\.exports = .*\n?$/, '\n');
 
+/**
+ * Configuração de segurança no topo do nó "Validar pedido". Valores definidos no
+ * n8n, fora do alcance do app: mesmo com o token vazado, ninguém lista nem grava
+ * fora das pastas fixas (quando preenchidas).
+ */
+function config(provedor) {
+  const exemplo = provedor === 'google' ? 'ID da pasta no Drive' : 'caminho, ex.: /Causa/Documentos';
+  return `// ===== Configuração de segurança (edite aqui) =====
+const CONFIG = {
+  // Máximo de chamadas por minuto a este webhook (o excedente recebe HTTP 429).
+  limitePorMinuto: 60,
+  // Se preenchidas, valem no lugar das pastas enviadas pelo app (${exemplo}).
+  pastaDestinoFixa: '',
+  pastaImportacaoFixa: '',
+};
+// ==================================================
+
+`;
+}
+
+/** Origens de navegador autorizadas (CORS). Apps Android/iOS não usam CORS e não são afetados. */
+const ORIGENS_PERMITIDAS = 'http://localhost:8081';
+
 const SERVICOS = {
   google: {
     nome: 'O Google',
@@ -80,7 +103,13 @@ function http(nome, id, posicao, credencial, { metodo, url, query, corpoJson, co
 
 function webhook(caminho, idBase) {
   return {
-    parameters: { httpMethod: 'POST', path: caminho, authentication: 'headerAuth', responseMode: 'responseNode', options: {} },
+    parameters: {
+      httpMethod: 'POST',
+      path: caminho,
+      authentication: 'headerAuth',
+      responseMode: 'responseNode',
+      options: { allowedOrigins: ORIGENS_PERMITIDAS },
+    },
     id: `${idBase}0001`,
     name: 'Webhook do Causa',
     type: 'n8n-nodes-base.webhook',
@@ -94,8 +123,8 @@ function rota(idBase) {
   return {
     parameters: {
       mode: 'expression',
-      numberOutputs: 4,
-      output: "={{ ['ping', 'listar_arquivos', 'gerar_documento', 'erro'].indexOf($json.rota) }}",
+      numberOutputs: 5,
+      output: "={{ ['ping', 'listar_arquivos', 'gerar_documento', 'erro', 'limite'].indexOf($json.rota) }}",
     },
     id: `${idBase}0003`,
     name: 'Rota',
@@ -106,6 +135,10 @@ function rota(idBase) {
 }
 
 const liga = (destino) => [{ node: destino, type: 'main', index: 0 }];
+
+function validar(provedor, idBase) {
+  return codigo('Validar pedido', `${idBase}0002`, [220, 300], config(provedor) + ler('nos/comum/protecoes.js') + '\n' + ler(`nos/${provedor}/validar.js`));
+}
 
 function explicarErro(servico, idBase) {
   const definicao = `const SERVICO = ${JSON.stringify(SERVICOS[servico])};\n`;
@@ -120,7 +153,7 @@ function workflowGoogle() {
   const cred = 'googleDocsOAuth2Api';
   const nodes = [
     webhook('causa', b),
-    codigo('Validar pedido', `${b}0002`, [220, 300], ler('nos/google/validar.js')),
+    validar('google', b),
     rota(b),
     responder('Responder ping', `${b}0004`, [680, 0], 200),
     http('Listar arquivos do Drive', `${b}0005`, [680, 200], cred, {
@@ -154,12 +187,15 @@ function workflowGoogle() {
     codigo('Formatar documento', `${b}0010`, [1120, 400], ler('nos/google/formatar-documento.js')),
     responder('Responder documento', `${b}0011`, [1340, 400], 200),
     responder('Responder erro', `${b}0012`, [680, 600], 400),
+    responder('Responder limite', `${b}0019`, [680, 800], 429),
     ...explicarErro('google', b),
   ];
   const connections = {
     'Webhook do Causa': { main: [liga('Validar pedido')] },
     'Validar pedido': { main: [liga('Rota')] },
-    Rota: { main: [liga('Responder ping'), liga('Listar arquivos do Drive'), liga('Copiar modelo'), liga('Responder erro')] },
+    Rota: {
+      main: [liga('Responder ping'), liga('Listar arquivos do Drive'), liga('Copiar modelo'), liga('Responder erro'), liga('Responder limite')],
+    },
     'Listar arquivos do Drive': { main: [liga('Formatar lista'), liga('Explicar erro')] },
     'Formatar lista': { main: [liga('Responder lista')] },
     'Copiar modelo': { main: [liga('Mesclar campos no Docs'), liga('Explicar erro')] },
@@ -175,7 +211,7 @@ function workflowOneDrive() {
   const cred = 'microsoftOneDriveOAuth2Api';
   const nodes = [
     webhook('causa-onedrive', b),
-    codigo('Validar pedido', `${b}0002`, [220, 300], ler('nos/onedrive/validar.js')),
+    validar('onedrive', b),
     rota(b),
     responder('Responder ping', `${b}0004`, [680, 0], 200),
     http('Listar arquivos do OneDrive', `${b}0005`, [680, 200], cred, { metodo: 'GET', url: '={{ $json.url }}' }),
@@ -218,12 +254,15 @@ function workflowOneDrive() {
     codigo('Formatar documento', `${b}0010`, [2000, 400], ler('nos/onedrive/formatar-documento.js')),
     responder('Responder documento', `${b}0011`, [2220, 400], 200),
     responder('Responder erro', `${b}0012`, [680, 600], 400),
+    responder('Responder limite', `${b}0019`, [680, 800], 429),
     ...explicarErro('onedrive', b),
   ];
   const connections = {
     'Webhook do Causa': { main: [liga('Validar pedido')] },
     'Validar pedido': { main: [liga('Rota')] },
-    Rota: { main: [liga('Responder ping'), liga('Listar arquivos do OneDrive'), liga('Baixar modelo'), liga('Responder erro')] },
+    Rota: {
+      main: [liga('Responder ping'), liga('Listar arquivos do OneDrive'), liga('Baixar modelo'), liga('Responder erro'), liga('Responder limite')],
+    },
     'Listar arquivos do OneDrive': { main: [liga('Formatar lista'), liga('Explicar erro')] },
     'Formatar lista': { main: [liga('Responder lista')] },
     'Baixar modelo': { main: [liga('Preparar modelo'), liga('Explicar erro')] },

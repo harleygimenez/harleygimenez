@@ -1,5 +1,6 @@
 // Valida o pedido do app Causa e decide a rota. No OneDrive, modelos e pastas
 // são caminhos a partir da raiz do seu OneDrive, como "/Causa/Modelos/Procuracao.docx".
+if (!limitarTaxa()) return muitasRequisicoes();
 const corpo = $input.first().json.body ?? {};
 const acao = String(corpo.acao ?? '');
 const GRAPH = 'https://graph.microsoft.com/v1.0/me/drive';
@@ -17,7 +18,7 @@ if (acao === 'ping') {
 }
 
 if (acao === 'listar_arquivos') {
-  const pasta = corpo.pastaId ? String(corpo.pastaId) : '/';
+  const pasta = CONFIG.pastaImportacaoFixa || (corpo.pastaId ? String(corpo.pastaId) : '/');
   if (!ehCaminho(pasta)) return erro('Caminho de pasta inválido. Use algo como /Causa/Documentos.');
   const busca = String(corpo.busca ?? '').trim().slice(0, 100);
   const campos = '$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100';
@@ -28,13 +29,15 @@ if (acao === 'listar_arquivos') {
 }
 
 if (acao === 'gerar_documento') {
-  const { modeloId, pastaId, nomeArquivo, campos } = corpo;
+  const { modeloId, nomeArquivo, campos } = corpo;
+  const pastaId = CONFIG.pastaDestinoFixa || corpo.pastaId;
   if (!ehCaminho(modeloId) || !/\.docx$/i.test(modeloId)) {
     return erro('O modelo deve ser o caminho de um arquivo .docx no OneDrive, como /Causa/Modelos/Procuracao.docx.');
   }
   if (!ehCaminho(pastaId)) return erro('Caminho da pasta de destino inválido. Use algo como /Causa/Documentos.');
   if (typeof nomeArquivo !== 'string' || !nomeArquivo.trim()) return erro('Informe o nome do arquivo.');
-  if (!campos || typeof campos !== 'object' || Array.isArray(campos)) return erro('Campos de mesclagem inválidos.');
+  const camposInvalidos = validarCampos(campos);
+  if (camposInvalidos) return erro(camposInvalidos);
 
   const nome = `${nomeArquivo.trim().replace(/[\\/"*:<>?|#%]/g, '-').slice(0, 200)}.docx`;
   const destino = `${pastaId.replace(/\/+$/, '')}/${nome}`;
@@ -49,4 +52,4 @@ if (acao === 'gerar_documento') {
   }];
 }
 
-return erro(`Ação desconhecida: ${acao || '(vazia)'}`);
+return erro(`Ação desconhecida: ${acao.slice(0, 40) || '(vazia)'}`);

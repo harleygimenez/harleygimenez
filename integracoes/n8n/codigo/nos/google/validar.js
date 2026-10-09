@@ -1,4 +1,5 @@
 // Valida o pedido do app Causa e decide a rota.
+if (!limitarTaxa()) return muitasRequisicoes();
 const corpo = $input.first().json.body ?? {};
 const acao = String(corpo.acao ?? '');
 const ehId = (v) => typeof v === 'string' && /^[\w-]{10,}$/.test(v);
@@ -9,7 +10,7 @@ if (acao === 'ping') {
 }
 
 if (acao === 'listar_arquivos') {
-  const pastaId = corpo.pastaId ? String(corpo.pastaId) : '';
+  const pastaId = CONFIG.pastaImportacaoFixa || (corpo.pastaId ? String(corpo.pastaId) : '');
   if (pastaId && !ehId(pastaId)) return erro('ID de pasta inválido.');
   // Escapa a busca para a sintaxe de consulta do Drive.
   const busca = String(corpo.busca ?? '').slice(0, 100).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -20,22 +21,21 @@ if (acao === 'listar_arquivos') {
 }
 
 if (acao === 'gerar_documento') {
-  const { modeloId, pastaId, nomeArquivo, campos } = corpo;
+  const { modeloId, nomeArquivo, campos } = corpo;
+  const pastaId = CONFIG.pastaDestinoFixa || corpo.pastaId;
   if (!ehId(modeloId)) return erro('ID do modelo inválido.');
   if (!ehId(pastaId)) return erro('ID da pasta de destino inválido.');
   if (typeof nomeArquivo !== 'string' || !nomeArquivo.trim()) return erro('Informe o nome do arquivo.');
-  if (!campos || typeof campos !== 'object' || Array.isArray(campos)) return erro('Campos de mesclagem inválidos.');
+  const camposInvalidos = validarCampos(campos);
+  if (camposInvalidos) return erro(camposInvalidos);
 
   // Cada campo vira um replaceAllText de {{chave}} no documento copiado.
-  const requisicoes = Object.entries(campos)
-    .filter(([chave]) => /^[\w.]+$/.test(chave))
-    .map(([chave, valor]) => ({
-      replaceAllText: {
-        containsText: { text: '{{' + chave + '}}', matchCase: true },
-        replaceText: String(valor ?? ''),
-      },
-    }));
-  if (requisicoes.length === 0) return erro('Nenhum campo para mesclar.');
+  const requisicoes = Object.entries(campos).map(([chave, valor]) => ({
+    replaceAllText: {
+      containsText: { text: '{{' + chave + '}}', matchCase: true },
+      replaceText: String(valor ?? ''),
+    },
+  }));
 
   return [{
     json: {
@@ -48,4 +48,4 @@ if (acao === 'gerar_documento') {
   }];
 }
 
-return erro(`Ação desconhecida: ${acao || '(vazia)'}`);
+return erro(`Ação desconhecida: ${acao.slice(0, 40) || '(vazia)'}`);

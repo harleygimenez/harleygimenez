@@ -39,10 +39,13 @@ npx expo start --web  # ou abra no navegador
 Verificações:
 
 ```bash
-npm test           # testes (CNJ, prazos, formatos, seletores e store)
+npm test           # testes (CNJ, prazos, DataJud, Word, integrações e segurança)
 npm run typecheck  # TypeScript
 npm run lint       # ESLint
+npm run seguranca  # segredos, padrões perigosos, workflows e dependências
 ```
+
+O relatório de segurança, com os 15 itens verificados e o checklist de produção, está em [SEGURANCA.md](SEGURANCA.md).
 
 Para gerar os instaladores de Android/iOS, use o EAS Build (`npx eas-cli@latest build`).
 

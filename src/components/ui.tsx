@@ -19,6 +19,9 @@ import { hojeISO, formatarData, lerDataBR, mascararData, somarDias } from '../li
 import { iniciais, normalizarBusca } from '../lib/formatos';
 import { cores, espaco, raio, sombra } from '../tema';
 
+export const LIMITE_TEXTO = 300;
+export const LIMITE_TEXTO_LONGO = 5000;
+
 export type NomeIcone = ComponentProps<typeof Ionicons>['name'];
 
 export function Tela({ children, rodape }: { children: ReactNode; rodape?: ReactNode }) {
@@ -138,6 +141,8 @@ export function Campo({
       <TextInput
         placeholderTextColor={cores.textoFraco}
         {...props}
+        // Limite padrão de tamanho para todo campo de texto do app.
+        maxLength={props.maxLength ?? (props.multiline ? LIMITE_TEXTO_LONGO : LIMITE_TEXTO)}
         style={[estilos.entrada, props.multiline && estilos.entradaMultilinha, !!erro && estilos.entradaErro]}
       />
       {erro ? <Text style={estilos.erro}>{erro}</Text> : dica ? <Text style={estilos.dica}>{dica}</Text> : null}

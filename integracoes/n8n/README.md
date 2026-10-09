@@ -90,6 +90,20 @@ Na seção **OneDrive** de **Ajustes › Integrações**, as pastas são **camin
 
 O workflow baixa o modelo, preenche os campos dentro do próprio n8n e envia o resultado à pasta de destino. Se já existir um arquivo com o mesmo nome, o OneDrive acrescenta um número. A formatação (negrito, fontes, tabelas) é mantida. O Word às vezes divide um campo em vários pedaços internos, por exemplo quando a correção ortográfica marca a palavra, e o preenchimento cuida disso. Mesmo assim, escreva cada campo de uma vez só, sem formatação diferente no meio.
 
+# Segurança (leia antes de colocar em produção)
+
+- **`NODE_ENV=production`:** sem isso, o n8n devolve o stack trace (com caminhos do servidor) para pedidos malformados, mesmo sem token. A imagem Docker oficial já vem assim.
+- **HTTPS obrigatório:** o app recusa `http://` fora da rede local.
+- **Token:** gere um valor longo e aleatório, por exemplo `openssl rand -hex 32`.
+- **Configuração no nó Validar pedido:** o bloco `CONFIG` no topo controla o limite de chamadas por minuto (padrão 60, depois disso HTTP 429) e as **pastas fixas** opcionais. Com as pastas fixas preenchidas, o workflow ignora as pastas enviadas pelo app, e um token vazado não alcança outras pastas.
+- **CORS:** o nó Webhook do Causa aceita só a origem `http://localhost:8081` (servidor de desenvolvimento do Expo web). Se publicar a versão web, troque em *Options › Allowed Origins (CORS)* pelo domínio dela. O app Android/iOS não depende disso.
+- **Proxy:** tentativas com token errado são recusadas antes do workflow e não entram no limite de chamadas. Para limitá-las também, use um proxy (Cloudflare, nginx `limit_req`).
+- **Teste do seu servidor:** depois de configurar, rode o teste a partir da raiz do repositório. Ele não altera nada no Drive/OneDrive.
+
+  ```bash
+  CAUSA_WEBHOOK=https://seu-n8n.com/webhook/causa CAUSA_TOKEN=... node integracoes/n8n/testar-seguranca.mjs
+  ```
+
 # Detalhes técnicos
 
 ## Contrato do webhook

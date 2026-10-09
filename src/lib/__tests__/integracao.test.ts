@@ -119,7 +119,7 @@ describe('cliente do n8n', () => {
 
   it('testa a conexão e lista arquivos', async () => {
     await expect(testarConexao(config, { fetch: respostaFalsa(200, { ok: true, versao: 1 }) })).resolves.toEqual({ versao: 1 });
-    const buscar = respostaFalsa(200, { arquivos: [{ id: 'a', nome: 'Contrato.pdf', url: 'u', mimeType: 'application/pdf' }] });
+    const buscar = respostaFalsa(200, { arquivos: [{ id: 'a', nome: 'Contrato.pdf', url: 'https://drive.google.com/file/d/a', mimeType: 'application/pdf' }] });
     const arquivos = await listarArquivos(config, { busca: ' contrato ', pastaId: ID }, { fetch: buscar });
     expect(arquivos).toHaveLength(1);
     expect(JSON.parse(buscar.mock.calls[0][1].body)).toEqual({ acao: 'listar_arquivos', busca: 'contrato', pastaId: ID });

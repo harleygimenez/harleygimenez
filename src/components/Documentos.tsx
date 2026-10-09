@@ -7,10 +7,15 @@ import { PROVEDORES, type Documento } from '../data/types';
 import { avisar, confirmar } from '../lib/confirmar';
 import { diaDoInstante, formatarData } from '../lib/datas';
 import { descreverTipoArquivo } from '../lib/google';
+import { ehLinkSeguro } from '../lib/urls';
 import { cores, espaco } from '../tema';
 import { Botao, BotaoIcone, Cartao, Secao, estilos } from './ui';
 
 export async function abrirDocumento(documento: Pick<Documento, 'url' | 'nome'>) {
+  if (!ehLinkSeguro(documento.url)) {
+    avisar('Link bloqueado', 'Só links https:// podem ser abertos pelo app.');
+    return;
+  }
   try {
     await Linking.openURL(documento.url);
   } catch {

@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { randomUUID } from 'expo-crypto';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { andamentoDoMovimento, resumoDoProcesso, type ProcessoDataJud } from '../lib/datajud';
 import { hojeISO } from '../lib/datas';
+import { guardarTokens, lerTokens, type Tokens } from '../lib/segredos';
 import { criarDadosExemplo } from './seed';
 import {
   ETAPAS,
@@ -22,8 +24,9 @@ import {
   type Processo,
 } from './types';
 
+/** UUID v4 aleatório (criptográfico): IDs não são sequenciais nem adivinháveis. */
 export function gerarId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  return randomUUID();
 }
 
 /** Campos de um registro novo; `id` presente indica edição. */
@@ -72,7 +75,12 @@ interface Configuracoes {
   perfil: Perfil;
 }
 
-export type Estado = Dados & Configuracoes & Acoes;
+export type Estado = Dados &
+  Configuracoes &
+  Acoes & {
+    /** Tokens lidos do cofre seguro (não é persistido). */
+    segredosCarregados: boolean;
+  };
 
 const vazio: Dados = {
   clientes: [],
@@ -103,6 +111,7 @@ export const useDados = create<Estado>()(
     (set, get) => ({
       ...vazio,
       iniciado: false,
+      segredosCarregados: false,
       integracao: integracaoVazia,
       perfil: perfilVazio,
 
@@ -232,6 +241,7 @@ export const useDados = create<Estado>()(
 
       salvarIntegracao(integracao) {
         set({ integracao });
+        void guardarTokens({ google: integracao.google.token, onedrive: integracao.onedrive.token });
       },
       salvarPerfil(perfil) {
         set({ perfil });
@@ -259,17 +269,51 @@ export const useDados = create<Estado>()(
         lancamentos: s.lancamentos,
         modelos: s.modelos,
         documentos: s.documentos,
-        integracao: s.integracao,
+        // Tokens nunca vão para o AsyncStorage/localStorage: ficam em lib/segredos.
+        integracao: semTokens(s.integracao),
         perfil: s.perfil,
         iniciado: s.iniciado,
       }),
       onRehydrateStorage: () => (estado) => {
         // Primeira abertura: mostra dados de exemplo para o app não começar vazio.
         if (estado && !estado.iniciado) estado.carregarExemplo();
+        void carregarSegredos(estado?.integracao);
       },
     },
   ),
 );
+
+function semTokens(i: Integracao): Integracao {
+  return { ...i, google: { ...i.google, token: '' }, onedrive: { ...i.onedrive, token: '' } };
+}
+
+/**
+ * Coloca os tokens do cofre seguro no estado. Versões antigas guardavam o token
+ * junto com os dados: ele é movido para o cofre e apagado do armazenamento comum.
+ */
+async function carregarSegredos(salva: Integracao | undefined) {
+  const legado: Tokens = { google: salva?.google.token ?? '', onedrive: salva?.onedrive.token ?? '' };
+  let tokens: Tokens;
+  try {
+    if (legado.google || legado.onedrive) {
+      await guardarTokens(legado);
+      tokens = legado;
+    } else {
+      tokens = await lerTokens();
+    }
+  } catch {
+    tokens = { google: '', onedrive: '' };
+  }
+  // Este set também regrava o armazenamento comum, já sem os tokens.
+  useDados.setState((s) => ({
+    segredosCarregados: true,
+    integracao: {
+      ...s.integracao,
+      google: { ...s.integracao.google, token: tokens.google },
+      onedrive: { ...s.integracao.onedrive, token: tokens.onedrive },
+    },
+  }));
+}
 
 /**
  * Atualiza dados salvos por versões anteriores do app.

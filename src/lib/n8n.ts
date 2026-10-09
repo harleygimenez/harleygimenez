@@ -1,4 +1,5 @@
 import type { Conexao } from '../data/types';
+import { ehLinkSeguro, validarUrlWebhook } from './urls';
 
 /**
  * Cliente dos webhooks do n8n que fazem a ponte com o Google Drive/Docs e com o OneDrive
@@ -25,8 +26,7 @@ interface Opcoes {
 
 export function validarIntegracao(config: Pick<Conexao, 'webhookUrl'>): string | null {
   if (!config.webhookUrl.trim()) return 'Informe a URL do webhook do n8n em Ajustes › Integrações.';
-  if (!/^https?:\/\/[^\s/]+/i.test(config.webhookUrl.trim())) return 'A URL do webhook deve começar com https://';
-  return null;
+  return validarUrlWebhook(config.webhookUrl);
 }
 
 async function chamar<T>(config: Conexao, acao: string, dados: object, opcoes: Opcoes = {}): Promise<T> {
@@ -96,7 +96,16 @@ export async function listarArquivos(
     opcoes,
   );
   if (!Array.isArray(r.arquivos)) throw new ErroIntegracao('Resposta inesperada do n8n ao listar arquivos.');
-  return r.arquivos;
+  // A resposta vem de fora do app: só passam itens bem formados com link https.
+  return r.arquivos
+    .filter((a) => a && typeof a.id === 'string' && typeof a.nome === 'string' && ehLinkSeguro(a.url))
+    .map((a) => ({
+      id: a.id,
+      nome: a.nome.slice(0, 300),
+      url: a.url,
+      mimeType: typeof a.mimeType === 'string' ? a.mimeType : '',
+      modificadoEm: typeof a.modificadoEm === 'string' ? a.modificadoEm : undefined,
+    }));
 }
 
 export async function gerarDocumento(
@@ -113,6 +122,9 @@ export async function gerarDocumento(
     { ...pedido, pastaId: config.pastaDestinoId },
     opcoes,
   );
-  if (!r.arquivo?.id) throw new ErroIntegracao('Resposta inesperada do n8n ao gerar o documento.');
-  return r.arquivo;
+  const a = r.arquivo;
+  if (!a || typeof a.id !== 'string' || typeof a.nome !== 'string' || !ehLinkSeguro(a.url)) {
+    throw new ErroIntegracao('Resposta inesperada do n8n ao gerar o documento.');
+  }
+  return { id: a.id, nome: a.nome.slice(0, 300), url: a.url, mimeType: typeof a.mimeType === 'string' ? a.mimeType : '' };
 }
