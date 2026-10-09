@@ -1,0 +1,84 @@
+# Gera um APK de teste (Android) e publica numa pré-release do GitHub para instalar no celular.
+# Assinado com a chave de debug: serve para testes, não para a Play Store.
+name: APK de teste
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ccr-9e2bfeec-nprv6w]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'app.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/apk-teste.yml'
+
+concurrency:
+  group: apk-teste-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testes, tipos e segurança
+        run: |
+          npm test -- --ci
+          npm run typecheck
+          npm run seguranca
+
+      - name: Gerar projeto Android
+        run: npx expo prebuild --platform android --no-install --clean
+        env:
+          CI: 1
+
+      - name: Compilar APK
+        working-directory: android
+        # arm64-v8a cobre praticamente todos os celulares atuais; armeabi-v7a, os mais antigos.
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+
+      - name: Nomear APK
+        id: apk
+        run: |
+          nome="causa-teste-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$nome"
+          echo "arquivo=$nome" >> "$GITHUB_OUTPUT"
+          ls -lh "$nome"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.arquivo }}
+          path: ${{ steps.apk.outputs.arquivo }}
+          retention-days: 14
+
+      - name: Publicar pré-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "apk-teste-${{ github.run_number }}" "${{ steps.apk.outputs.arquivo }}" \
+            --target "${{ github.sha }}" \
+            --prerelease \
+            --title "Causa – APK de teste ${{ github.run_number }}" \
+            --notes "APK de teste gerado a partir do commit ${{ github.sha }}. Assinado com chave de debug (não é para a Play Store). Para instalar: abra este link no celular Android, baixe o .apk e permita a instalação de fontes desconhecidas."
