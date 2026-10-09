@@ -40,7 +40,8 @@ const PADROES_SEGREDO = [
   ['chave Google API', /AIza[0-9A-Za-z_-]{35}/],
   ['token GitHub', /gh[pousr]_[0-9A-Za-z]{36}/],
   ['token Slack', /xox[abprs]-[0-9A-Za-z-]{10,}/],
-  ['chave OpenAI/Anthropic', /sk-(?:ant-)?[0-9A-Za-z_-]{20,}/],
+  // \b evita falsos positivos como "task-outline" (nomes de ícones).
+  ['chave OpenAI/Anthropic', /\bsk-(?:ant-[a-z0-9]+-|proj-)?[0-9A-Za-z_-]{32,}/],
   ['chave privada', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ['segredo do Google OAuth', /GOCSPX-[0-9A-Za-z_-]{20,}/],
   ['segredo atribuído no código', /\b(?:api[_-]?key|secret|password|senha|client[_-]?secret|token)\b\s*[:=]\s*['"`][^'"`\s]{16,}['"`]/i],
@@ -72,7 +73,7 @@ varrerSegredos(codigo, 'código-fonte');
 
 const pastaBuild = process.argv[2];
 if (pastaBuild) {
-  const bundle = arquivos(join(raiz, pastaBuild), ['.js', '.html', '.json', '.map']);
+  const bundle = arquivos(join(raiz, pastaBuild), ['.js', '.html', '.json', '.map', '.bundle']);
   if (bundle.length) varrerSegredos(bundle, `bundle web (${pastaBuild})`);
   else falha(`pasta de build ${pastaBuild} vazia ou inexistente`);
 }

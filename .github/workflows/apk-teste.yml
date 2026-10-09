@@ -59,6 +59,12 @@ jobs:
         # arm64-v8a cobre praticamente todos os celulares atuais; armeabi-v7a, os mais antigos.
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
 
+      - name: Verificar segredos no APK
+        run: |
+          mkdir -p apk-conteudo
+          unzip -q -o android/app/build/outputs/apk/release/app-release.apk 'assets/*' -d apk-conteudo
+          npm run seguranca -- apk-conteudo
+
       - name: Nomear APK
         id: apk
         run: |
