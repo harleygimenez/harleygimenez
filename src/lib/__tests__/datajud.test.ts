@@ -6,6 +6,7 @@ import {
   CHAVE_PUBLICA_DATAJUD,
   consultarDataJud,
   converterResposta,
+  corrigirAcentos,
   lerDataDataJud,
   tipoDoMovimento,
   type RespostaDataJud,
@@ -169,5 +170,15 @@ describe('caminhos e modelos do OneDrive', () => {
     expect(validarModelo('onedrive', '')).toMatch('caminho');
     expect(validarModelo('google', 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit')).toBeNull();
     expect(validarModelo('google', 'qualquer coisa')).toMatch('Google Docs');
+  });
+});
+
+describe('acentos trocados vindos do DataJud', () => {
+  it('desfaz UTF-8 lido como Latin-1 e preserva texto correto', () => {
+    // Trecho real devolvido pelo DataJud (TJES) para o processo 0015786-53.2018.8.08.0035.
+    expect(corrigirAcentos('alteração de competência do Ã³rgÃ£o')).toBe('alteração de competência do órgão');
+    expect(corrigirAcentos('Redistribuição')).toBe('Redistribuição');
+    expect(corrigirAcentos('PETIÃ\u0087Ã\u0083O')).toBe('PETIÇÃO');
+    expect(corrigirAcentos('Âmbito da Ação')).toBe('Âmbito da Ação');
   });
 });

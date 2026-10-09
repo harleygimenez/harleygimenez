@@ -130,9 +130,27 @@ export function descreverGrau(grau: string): string {
   return NOMES_GRAU[grau] ?? grau;
 }
 
+/**
+ * Alguns tribunais enviam ao DataJud trechos em UTF-8 lidos como Latin-1 ("Ã³rgÃ£o" em vez
+ * de "órgão"), às vezes misturados com acentos corretos na mesma frase. Desfaz cada
+ * sequência trocada; texto correto passa sem mudança.
+ */
+export function corrigirAcentos(texto: string): string {
+  return texto
+    .replace(/[\u00e0-\u00ef][\u0080-\u00bf]{2}/g, (seq) => {
+      const [a, b, c] = [...seq].map((ch) => ch.charCodeAt(0));
+      const codigo = ((a & 0x0f) << 12) | ((b & 0x3f) << 6) | (c & 0x3f);
+      return codigo >= 0x800 ? String.fromCharCode(codigo) : seq;
+    })
+    .replace(/[\u00c2-\u00df][\u0080-\u00bf]/g, (seq) => {
+      const [a, b] = [...seq].map((ch) => ch.charCodeAt(0));
+      return String.fromCharCode(((a & 0x1f) << 6) | (b & 0x3f));
+    });
+}
+
 function descreverMovimento(m: MovimentoBruto): string {
   const complementos = (m.complementosTabelados ?? [])
-    .map((c) => [c.descricao?.replace(/_/g, ' '), c.nome].filter(Boolean).join(': '))
+    .map((c) => corrigirAcentos([c.descricao?.replace(/_/g, ' '), c.nome].filter(Boolean).join(': ')))
     .filter(Boolean);
   return complementos.join(' · ');
 }
@@ -159,7 +177,7 @@ export function converterResposta(resposta: RespostaDataJud): ProcessoDataJud | 
         chave,
         codigo: m.codigo ?? 0,
         data,
-        nome: m.nome,
+        nome: corrigirAcentos(m.nome),
         descricao: descreverMovimento(m),
         grau: fonte.grau ?? '',
       });
@@ -170,7 +188,7 @@ export function converterResposta(resposta: RespostaDataJud): ProcessoDataJud | 
   const assuntos = new Set<string>();
   for (const fonte of fontes) {
     for (const a of fonte.assuntos ?? []) {
-      for (const item of Array.isArray(a) ? a : [a]) if (item.nome) assuntos.add(item.nome);
+      for (const item of Array.isArray(a) ? a : [a]) if (item.nome) assuntos.add(corrigirAcentos(item.nome));
     }
   }
 
@@ -178,9 +196,9 @@ export function converterResposta(resposta: RespostaDataJud): ProcessoDataJud | 
     numero: principal.numeroProcesso ?? '',
     tribunal: principal.tribunal ?? '',
     graus: [...new Set(fontes.map((f) => f.grau).filter((g): g is string => !!g))],
-    classe: principal.classe?.nome ?? '',
+    classe: corrigirAcentos(principal.classe?.nome ?? ''),
     assuntos: [...assuntos],
-    orgaoJulgador: principal.orgaoJulgador?.nome ?? '',
+    orgaoJulgador: corrigirAcentos(principal.orgaoJulgador?.nome ?? ''),
     sistema: principal.sistema?.nome ?? '',
     dataAjuizamento: lerDataDataJud(fontes.map((f) => f.dataAjuizamento).find(Boolean)),
     ultimaAtualizacao: principal.dataHoraUltimaAtualizacao ?? '',
