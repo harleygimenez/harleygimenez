@@ -4,11 +4,16 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { andamentoDoMovimento, resumoDoProcesso, type ProcessoDataJud } from '../lib/datajud';
-import { hojeISO } from '../lib/datas';
+import { formatarData, hojeISO } from '../lib/datas';
+import { andamentoDaPublicacao, type Publicacao } from '../lib/djen';
+import { normalizarBusca } from '../lib/formatos';
+import { sugerirPrazos } from '../lib/prazosPublicacao';
 import { guardarTokens, lerTokens, type Tokens } from '../lib/segredos';
 import { criarDadosExemplo } from './seed';
+import { novoProcessoDoDiario, tipoPessoaPeloNome, type ProcessoDoDiario } from './importacao';
 import {
   ETAPAS,
+  type Advogado,
   type Andamento,
   type Atendimento,
   type Cliente,
@@ -52,6 +57,13 @@ interface Acoes {
   salvarAndamento(a: Rascunho<Andamento>): string;
   /** Guarda o resumo do DataJud e importa só os movimentos novos. Retorna quantos entraram. */
   importarDataJud(processoId: string, dados: ProcessoDataJud): number;
+  /**
+   * Importa publicações do Diário (DJEN) como andamentos com o inteiro teor e, se ligado
+   * em Ajustes, cria na agenda os prazos ainda abertos. Publicações já importadas são ignoradas.
+   */
+  importarPublicacoes(processoId: string, publicacoes: Publicacao[], hoje?: string): ResultadoImportacao;
+  /** Cria (ou reaproveita) clientes e processos encontrados no Diário e importa as publicações. */
+  importarDoDiario(itens: { processo: ProcessoDoDiario; clienteNome: string }[], hoje?: string): ResultadoImportacao & { processosNovos: number; clientesNovos: number };
   excluirAndamento(id: string): void;
   salvarCompromisso(c: Rascunho<Compromisso>): string;
   alternarConcluido(id: string): void;
@@ -65,6 +77,8 @@ interface Acoes {
   excluirDocumento(id: string): void;
   salvarIntegracao(i: Integracao): void;
   salvarPerfil(p: Perfil): void;
+  salvarAdvogado(a: Rascunho<Advogado>): string;
+  excluirAdvogado(id: string): void;
   carregarExemplo(): void;
   apagarTudo(): void;
 }
@@ -73,6 +87,13 @@ interface Configuracoes {
   iniciado: boolean;
   integracao: Integracao;
   perfil: Perfil;
+  /** Outros advogados do escritório (o titular está no perfil). */
+  equipe: Advogado[];
+}
+
+export interface ResultadoImportacao {
+  andamentos: number;
+  prazos: number;
 }
 
 export type Estado = Dados &
@@ -94,7 +115,12 @@ const vazio: Dados = {
 };
 
 export const conexaoVazia: Conexao = { webhookUrl: '', token: '', pastaDestinoId: '', pastaImportacaoId: '' };
-export const integracaoVazia: Integracao = { google: conexaoVazia, onedrive: conexaoVazia, chaveDataJud: '' };
+export const integracaoVazia: Integracao = {
+  google: conexaoVazia,
+  onedrive: conexaoVazia,
+  chaveDataJud: '',
+  prazosAutomaticos: true,
+};
 export const perfilVazio: Perfil = { nome: '', oab: '', email: '', telefone: '', cidade: '' };
 
 /** Remove o vínculo com um processo ou cliente excluído sem apagar o registro. */
@@ -114,6 +140,7 @@ export const useDados = create<Estado>()(
       segredosCarregados: false,
       integracao: integracaoVazia,
       perfil: perfilVazio,
+      equipe: [],
 
       salvarCliente(c) {
         const [clientes, id] = salvarEm(get().clientes, c);
@@ -183,6 +210,81 @@ export const useDados = create<Estado>()(
         });
         return novos.length;
       },
+      importarPublicacoes(processoId, publicacoes, hoje = hojeISO()) {
+        const s = get();
+        const processo = s.processos.find((p) => p.id === processoId);
+        if (!processo) return { andamentos: 0, prazos: 0 };
+        const existentes = new Set(s.andamentos.map((a) => a.chaveExterna).filter(Boolean));
+        const prazosExistentes = new Set(s.compromissos.map((c) => c.chaveExterna).filter(Boolean));
+
+        const andamentos: Andamento[] = [];
+        const compromissos: Compromisso[] = [];
+        for (const p of publicacoes) {
+          const andamento = andamentoDaPublicacao(p);
+          if (existentes.has(andamento.chaveExterna)) continue;
+          existentes.add(andamento.chaveExterna);
+          andamentos.push({ ...andamento, id: gerarId(), processoId });
+          if (!s.integracao.prazosAutomaticos) continue;
+
+          for (const prazo of sugerirPrazos(p)) {
+            const chave = `${andamento.chaveExterna}:${prazo.titulo}`;
+            // Prazos já vencidos ficam só na timeline; os abertos vão para a agenda.
+            if (prazo.vencimento < hoje || prazosExistentes.has(chave)) continue;
+            prazosExistentes.add(chave);
+            compromissos.push({
+              id: gerarId(),
+              tipo: 'prazo',
+              titulo: `${prazo.titulo} (${prazo.dias} ${prazo.diasUteis ? 'dias úteis' : 'dias corridos'})`,
+              data: prazo.vencimento,
+              hora: '',
+              processoId,
+              clienteId: processo.clienteId || undefined,
+              descricao:
+                `${prazo.fundamento}\n` +
+                `Disponibilizado no DJEN em ${formatarData(p.dataDisponibilizacao)}, publicado em ${formatarData(prazo.publicacao)}. ` +
+                'Prazo calculado automaticamente pelo OpenJus: confira no processo e no calendário do tribunal.',
+              prioridade: 'alta',
+              concluido: false,
+              chaveExterna: chave,
+            });
+          }
+        }
+        set({ andamentos: [...s.andamentos, ...andamentos], compromissos: [...s.compromissos, ...compromissos] });
+        return { andamentos: andamentos.length, prazos: compromissos.length };
+      },
+      importarDoDiario(itens, hoje = hojeISO()) {
+        const total = { andamentos: 0, prazos: 0, processosNovos: 0, clientesNovos: 0 };
+        for (const { processo, clienteNome } of itens) {
+          const s = get();
+          let existente = s.processos.find((p) => p.numero.replace(/\D/g, '') === processo.numero);
+          if (!existente) {
+            const nome = clienteNome.trim();
+            let cliente = nome ? s.clientes.find((c) => normalizarBusca(c.nome) === normalizarBusca(nome)) : undefined;
+            if (nome && !cliente) {
+              const id = get().salvarCliente({
+                tipo: tipoPessoaPeloNome(nome),
+                nome,
+                documento: '',
+                email: '',
+                telefone: '',
+                endereco: '',
+                observacoes: 'Cadastrado automaticamente a partir do Diário de Justiça (DJEN).',
+                criadoEm: new Date().toISOString(),
+              });
+              cliente = get().clientes.find((c) => c.id === id);
+              total.clientesNovos++;
+            }
+            const id = get().salvarProcesso(novoProcessoDoDiario(processo, cliente?.id ?? '', nome));
+            existente = get().processos.find((p) => p.id === id);
+            total.processosNovos++;
+          }
+          if (!existente) continue;
+          const r = get().importarPublicacoes(existente.id, processo.publicacoes, hoje);
+          total.andamentos += r.andamentos;
+          total.prazos += r.prazos;
+        }
+        return total;
+      },
       excluirAndamento(id) {
         set({ andamentos: get().andamentos.filter((a) => a.id !== id) });
       },
@@ -246,6 +348,14 @@ export const useDados = create<Estado>()(
       salvarPerfil(perfil) {
         set({ perfil });
       },
+      salvarAdvogado(a) {
+        const [equipe, id] = salvarEm(get().equipe, a);
+        set({ equipe });
+        return id;
+      },
+      excluirAdvogado(id) {
+        set({ equipe: get().equipe.filter((a) => a.id !== id) });
+      },
 
       // Modelos, integração e perfil são configurações e sobrevivem à troca de dados.
       carregarExemplo() {
@@ -257,7 +367,7 @@ export const useDados = create<Estado>()(
     }),
     {
       name: 'openjus-dados',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (salvo, versao) => migrarDados(salvo as Record<string, unknown>, versao) as unknown as Estado,
       partialize: (s): Dados & Configuracoes => ({
@@ -272,6 +382,7 @@ export const useDados = create<Estado>()(
         // Tokens nunca vão para o AsyncStorage/localStorage: ficam em lib/segredos.
         integracao: semTokens(s.integracao),
         perfil: s.perfil,
+        equipe: s.equipe,
         iniciado: s.iniciado,
       }),
       onRehydrateStorage: () => (estado) => {
@@ -319,6 +430,7 @@ async function carregarSegredos(salva: Integracao | undefined) {
  * Atualiza dados salvos por versões anteriores do app.
  * v1 → v2: documentos, modelos, integração e perfil.
  * v2 → v3: integração separada por provedor (Google e OneDrive) e chave do DataJud.
+ * v3 → v4: prazos automáticos do Diário (DJEN) e equipe do escritório.
  */
 export function migrarDados(salvo: Record<string, unknown>, versao: number): Record<string, unknown> {
   let dados = { ...salvo };
@@ -340,6 +452,10 @@ export function migrarDados(salvo: Record<string, unknown>, versao: number): Rec
       arquivoId: googleDocId ?? '',
     }));
     dados.documentos = ((dados.documentos ?? []) as object[]).map((d) => ({ provedor: 'google', ...d }));
+  }
+  if (versao < 4) {
+    dados.integracao = { prazosAutomaticos: true, ...(dados.integracao as object) };
+    dados.equipe = dados.equipe ?? [];
   }
   return dados;
 }

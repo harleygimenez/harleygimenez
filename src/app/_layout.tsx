@@ -67,6 +67,8 @@ export default function Raiz() {
           <Stack.Screen name="modelo/form" options={formulario} />
           <Stack.Screen name="documento/gerar" options={formulario} />
           <Stack.Screen name="documento/importar" options={formulario} />
+          <Stack.Screen name="publicacoes" options={{ title: 'Publicações no Diário' }} />
+          <Stack.Screen name="equipe" options={{ title: 'Equipe do escritório' }} />
         </Stack>
       ) : (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: cores.fundo }}>

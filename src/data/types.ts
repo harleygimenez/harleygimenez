@@ -98,8 +98,12 @@ export interface Andamento {
   data: DataISO;
   tipo: TipoAndamento;
   descricao: string;
-  /** Identificador do movimento importado do DataJud, para não duplicá-lo. */
+  /** Identificador do movimento importado (DataJud ou DJEN), para não duplicá-lo. */
   chaveExterna?: string;
+  /** Texto publicado no Diário de Justiça (decisão, despacho, sentença…). */
+  inteiroTeor?: string;
+  /** Certidão ou documento da publicação (só https). */
+  link?: string;
 }
 
 export const TIPOS_COMPROMISSO = {
@@ -125,6 +129,8 @@ export interface Compromisso {
   prioridade: Prioridade;
   concluido: boolean;
   concluidoEm?: string;
+  /** Prazo criado automaticamente a partir de uma publicação (não é recriado se excluído). */
+  chaveExterna?: string;
 }
 
 export type TipoLancamento = 'receita' | 'despesa';
@@ -203,6 +209,8 @@ export interface Integracao {
   onedrive: Conexao;
   /** Chave da API pública do DataJud; vazio usa a chave pública divulgada pelo CNJ. */
   chaveDataJud: string;
+  /** Cria na agenda os prazos abertos pelas publicações do Diário (DJEN). */
+  prazosAutomaticos: boolean;
 }
 
 /** Dados de quem assina os documentos, usados nos campos {{advogado.*}}. */
@@ -212,6 +220,16 @@ export interface Perfil {
   email: string;
   telefone: string;
   cidade: string;
+}
+
+/** Advogado do escritório, usado na busca de publicações pela OAB. */
+export interface Advogado {
+  id: string;
+  nome: string;
+  /** Número da OAB, só dígitos. */
+  oab: string;
+  uf: string;
+  email: string;
 }
 
 export interface Dados {

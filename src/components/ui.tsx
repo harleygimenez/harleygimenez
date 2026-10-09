@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -447,7 +448,48 @@ export function LinhaInfo({ rotulo, valor }: { rotulo: string; valor?: string })
   );
 }
 
+/** Interruptor com rótulo e explicação. */
+export function Alternar({
+  rotulo,
+  dica,
+  valor,
+  aoMudar,
+}: {
+  rotulo: string;
+  dica?: string;
+  valor: boolean;
+  aoMudar: (v: boolean) => void;
+}) {
+  return (
+    <View style={estilos.alternar}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={estilos.texto}>{rotulo}</Text>
+        {!!dica && <Text style={estilos.dica}>{dica}</Text>}
+      </View>
+      <Switch
+        value={valor}
+        onValueChange={aoMudar}
+        accessibilityLabel={rotulo}
+        trackColor={{ true: cores.primaria, false: cores.borda }}
+      />
+    </View>
+  );
+}
+
+/** Mensagem de sucesso ou erro depois de uma ação. */
+export function Aviso({ tipo, mensagem }: { tipo: 'ok' | 'erro'; mensagem: string }) {
+  const cor = tipo === 'ok' ? cores.sucesso : cores.perigo;
+  return (
+    <View style={[estilos.aviso, { backgroundColor: tipo === 'ok' ? cores.sucessoClaro : cores.perigoClaro }]}>
+      <Ionicons name={tipo === 'ok' ? 'checkmark-circle' : 'alert-circle'} size={20} color={cor} />
+      <Text style={{ flex: 1, color: cor }}>{mensagem}</Text>
+    </View>
+  );
+}
+
 export const estilos = StyleSheet.create({
+  alternar: { flexDirection: 'row', alignItems: 'center', gap: espaco.md },
+  aviso: { flexDirection: 'row', gap: espaco.sm, alignItems: 'center', padding: espaco.md, borderRadius: raio.md },
   tela: { flex: 1, backgroundColor: cores.fundo },
   telaConteudo: { padding: espaco.lg, paddingBottom: 96, gap: espaco.lg },
   cartao: {

@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { Botao, Campo, Cartao, Secao, Tela, estilos } from '../components/ui';
+import { Alternar, Botao, Campo, Cartao, Secao, Tela, estilos } from '../components/ui';
 import { useDados } from '../data/store';
 import { PROVEDORES, type Conexao, type Provedor } from '../data/types';
 import { identificarArquivo } from '../lib/armazenamento';
@@ -154,6 +154,7 @@ export default function Integracoes() {
   const [google, setGoogle] = useState<Rascunho>(integracao.google);
   const [onedrive, setOnedrive] = useState<Rascunho>(integracao.onedrive);
   const [chaveDataJud, setChaveDataJud] = useState(integracao.chaveDataJud);
+  const [prazosAutomaticos, setPrazosAutomaticos] = useState(integracao.prazosAutomaticos);
   const [nome, setNome] = useState(perfil.nome);
   const [oab, setOab] = useState(perfil.oab);
   const [email, setEmail] = useState(perfil.email);
@@ -165,6 +166,7 @@ export default function Integracoes() {
       google: resolver('google', google),
       onedrive: resolver('onedrive', onedrive),
       chaveDataJud: chaveDataJud.trim(),
+      prazosAutomaticos,
     });
     salvarPerfil({ nome: nome.trim(), oab: oab.trim(), email: email.trim(), telefone, cidade: cidade.trim() });
     router.back();
@@ -203,10 +205,31 @@ export default function Integracoes() {
         </Cartao>
       </Secao>
 
+      <Secao titulo="Diário de Justiça (DJEN)">
+        <Cartao estilo={{ gap: espaco.md }}>
+          <Text style={estilos.textoSuave}>
+            O texto das intimações, despachos e decisões vem do Diário de Justiça Eletrônico Nacional (Comunica PJe, do
+            CNJ). A consulta é pública e não precisa de chave.
+          </Text>
+          <Alternar
+            rotulo="Criar prazos automaticamente"
+            dica="Ao importar uma publicação, cria na agenda o prazo fixado pelo juiz ou, se não houver, o prazo da lei (CPC, CLT, Lei 9.099, CPP). Confira sempre."
+            valor={prazosAutomaticos}
+            aoMudar={setPrazosAutomaticos}
+          />
+        </Cartao>
+      </Secao>
+
       <Secao titulo="Seus dados nos documentos">
         <Cartao estilo={{ gap: espaco.md }}>
           <Campo rotulo="Nome" value={nome} onChangeText={setNome} placeholder="{{advogado.nome}}" />
-          <Campo rotulo="OAB" value={oab} onChangeText={setOab} placeholder="Ex.: OAB/SP 123.456" />
+          <Campo
+            rotulo="OAB"
+            value={oab}
+            onChangeText={setOab}
+            placeholder="Ex.: OAB/SP 123.456"
+            dica="Usada também para buscar suas publicações no Diário."
+          />
           <Campo
             rotulo="E-mail"
             value={email}

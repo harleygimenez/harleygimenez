@@ -14,6 +14,7 @@ describe('tokens fora do armazenamento comum (itens 7 e 8)', () => {
       google: { ...conexaoVazia, webhookUrl: 'https://n8n.exemplo.com/webhook/openjus', token: 'segredo-google-123' },
       onedrive: { ...conexaoVazia, token: 'segredo-onedrive-456' },
       chaveDataJud: '',
+      prazosAutomaticos: true,
     });
     await esperar();
     const salvo = (await AsyncStorage.getItem('openjus-dados')) ?? '';

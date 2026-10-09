@@ -12,6 +12,7 @@ export default function Ajustes() {
   const carregarExemplo = useDados((s) => s.carregarExemplo);
   const apagarTudo = useDados((s) => s.apagarTudo);
   const integracao = useDados((s) => s.integracao);
+  const equipe = useDados((s) => s.equipe.length);
   const totais = useDados(
     useShallow((s) => ({
       clientes: s.clientes.length,
@@ -35,6 +36,21 @@ export default function Ajustes() {
             são perdidos. Restaurar ou apagar mantém seus modelos e a integração.
           </Text>
         </Cartao>
+      </Secao>
+
+      <Secao titulo="Escritório">
+        <Botao
+          titulo="Publicações no Diário (DJEN)"
+          icone="newspaper-outline"
+          variante="secundario"
+          aoPressionar={() => router.push('/publicacoes')}
+        />
+        <Botao
+          titulo={`Equipe do escritório (${equipe + 1} ${equipe === 0 ? 'advogado' : 'advogados'})`}
+          icone="people-outline"
+          variante="secundario"
+          aoPressionar={() => router.push('/equipe')}
+        />
       </Secao>
 
       <Secao titulo="Integrações">

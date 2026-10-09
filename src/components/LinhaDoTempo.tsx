@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ItemLinhaDoTempo } from '../data/selectors';
-import { TIPOS_COMPROMISSO } from '../data/types';
+import { TIPOS_COMPROMISSO, type Andamento } from '../data/types';
 import { formatarData } from '../lib/datas';
 import { formatarMoeda } from '../lib/formatos';
 import { cores, espaco } from '../tema';
@@ -56,6 +57,40 @@ function abrir(item: ItemLinhaDoTempo) {
   }
 }
 
+/** Inteiro teor publicado no Diário, recolhido por padrão, e o link da certidão. */
+function InteiroTeor({ andamento }: { andamento: Andamento }) {
+  const [aberto, setAberto] = useState(false);
+  const teor = andamento.inteiroTeor ?? '';
+  const longo = teor.length > 180 || teor.split('\n').length > 4;
+  return (
+    <View style={s.teor}>
+      {!!andamento.inteiroTeor && (
+        <Text style={s.teorTexto} numberOfLines={aberto ? undefined : 5} selectable={aberto}>
+          {andamento.inteiroTeor}
+        </Text>
+      )}
+      <View style={s.teorAcoes}>
+        {longo && (
+          <Pressable onPress={() => setAberto(!aberto)} hitSlop={8} accessibilityRole="button">
+            <Text style={s.teorAcao}>{aberto ? 'Recolher' : 'Ler inteiro teor'}</Text>
+          </Pressable>
+        )}
+        {!!andamento.link && (
+          <Pressable
+            onPress={() => abrirDocumento({ url: andamento.link ?? '', nome: 'Certidão' })}
+            hitSlop={8}
+            accessibilityRole="link"
+            style={s.teorLink}
+          >
+            <Ionicons name="open-outline" size={14} color={cores.primaria} />
+            <Text style={s.teorAcao}>Certidão da publicação</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
 export function LinhaDoTempo({ itens }: { itens: ItemLinhaDoTempo[] }) {
   if (itens.length === 0) {
     return <Vazio icone="time-outline" titulo="Nada registrado ainda" texto="Adicione andamentos, prazos ou lançamentos." />;
@@ -77,6 +112,9 @@ export function LinhaDoTempo({ itens }: { itens: ItemLinhaDoTempo[] }) {
               <Text style={s.data}>{formatarData(item.data)}</Text>
               <Text style={s.titulo}>{item.titulo}</Text>
               {!!item.descricao && <Text style={s.descricao}>{item.descricao}</Text>}
+              {item.tipo === 'andamento' && (!!item.item.inteiroTeor || !!item.item.link) && (
+                <InteiroTeor andamento={item.item} />
+              )}
               {item.tipo === 'lancamento' && (
                 <Text style={[s.descricao, { color: cor, fontWeight: '600' }]}>
                   {formatarMoeda(item.item.valor)} · {item.item.pago ? 'quitado' : 'em aberto'}
@@ -99,4 +137,17 @@ const s = StyleSheet.create({
   data: { fontSize: 12, color: cores.textoFraco, fontWeight: '600' },
   titulo: { fontSize: 15, fontWeight: '600', color: cores.texto },
   descricao: { fontSize: 14, color: cores.textoSuave, lineHeight: 20 },
+  teor: {
+    marginTop: espaco.xs,
+    padding: espaco.md,
+    gap: espaco.sm,
+    borderRadius: 8,
+    backgroundColor: cores.fundo,
+    borderLeftWidth: 3,
+    borderLeftColor: cores.primaria,
+  },
+  teorTexto: { fontSize: 13, color: cores.texto, lineHeight: 19 },
+  teorAcoes: { flexDirection: 'row', flexWrap: 'wrap', gap: espaco.lg },
+  teorAcao: { fontSize: 13, fontWeight: '600', color: cores.primaria },
+  teorLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 });

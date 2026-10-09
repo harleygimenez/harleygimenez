@@ -76,6 +76,7 @@ export default function Inicio() {
       <View style={s.atalhos}>
         <Atalho icone="briefcase-outline" rotulo="Processo" rota="/processo/form" />
         <Atalho icone="alarm-outline" rotulo="Prazo" rota="/compromisso/form?tipo=prazo" />
+        <Atalho icone="newspaper-outline" rotulo="Diário" rota="/publicacoes" />
         <Atalho icone="calculator-outline" rotulo="Calcular prazo" rota="/calculadora" />
         <Atalho icone="person-add-outline" rotulo="Cliente" rota="/cliente/form" />
       </View>
