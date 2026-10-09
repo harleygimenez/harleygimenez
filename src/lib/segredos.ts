@@ -48,3 +48,16 @@ export async function guardarTokens(tokens: Tokens): Promise<void> {
     else await SecureStore.deleteItemAsync(chave(p));
   }
 }
+
+const CHAVE_SESSAO_NUVEM = 'openjus.nuvem.renovacao';
+
+/** Token de renovação da sessão do escritório (Supabase). O token de acesso fica só na memória. */
+export async function lerTokenNuvem(): Promise<string> {
+  return (Platform.OS === 'web' ? web.ler(CHAVE_SESSAO_NUVEM) : await SecureStore.getItemAsync(CHAVE_SESSAO_NUVEM)) ?? '';
+}
+
+export async function guardarTokenNuvem(token: string): Promise<void> {
+  if (Platform.OS === 'web') web.gravar(CHAVE_SESSAO_NUVEM, token);
+  else if (token) await SecureStore.setItemAsync(CHAVE_SESSAO_NUVEM, token);
+  else await SecureStore.deleteItemAsync(CHAVE_SESSAO_NUVEM);
+}

@@ -14,6 +14,7 @@
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "expo-web-browser": "~57.0.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -23,6 +24,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
@@ -39,7 +41,8 @@
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "seguranca": "node scripts/verificar-seguranca.mjs"
+    "seguranca": "node scripts/verificar-seguranca.mjs",
+    "testar:nuvem": "node nuvem/testar-rls.mjs"
   },
   "private": true,
   "jest": {

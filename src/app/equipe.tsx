@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Avatar, Botao, BotaoIcone, Campo, Cartao, Secao, Tela, Vazio, estilos } from '../components/ui';
+import { useNuvem } from '../data/nuvem';
 import { useDados } from '../data/store';
 import { formatarOab } from '../lib/advogados';
 import { confirmar } from '../lib/confirmar';
@@ -15,6 +16,7 @@ export default function Equipe() {
   const equipe = useDados((s) => s.equipe);
   const salvarAdvogado = useDados((s) => s.salvarAdvogado);
   const excluirAdvogado = useDados((s) => s.excluirAdvogado);
+  const escritorio = useNuvem((s) => s.escritorio);
 
   const [nome, setNome] = useState('');
   const [oab, setOab] = useState('');
@@ -38,9 +40,11 @@ export default function Equipe() {
   return (
     <Tela>
       <Text style={estilos.textoSuave}>
-        Cadastre os advogados do escritório para buscar as publicações de todos no Diário de Justiça. Para que cada um use o
-        app no próprio celular com os mesmos dados, entre com a conta do escritório em Ajustes › Conta e escritório.
+        {escritorio
+          ? `A equipe vem do escritório ${escritorio.nome}: as OABs de todos entram na busca de publicações no Diário. Para convidar ou remover advogados, use Conta e escritório.`
+          : 'Cadastre os advogados do escritório para buscar as publicações de todos no Diário de Justiça. Para que cada um use o app no próprio celular com os mesmos dados, entre com a conta do escritório em Conta e escritório.'}
       </Text>
+      <Botao titulo="Conta e escritório" icone="business-outline" variante="secundario" aoPressionar={() => router.push('/conta')} />
 
       <Secao titulo="Titular">
         <Cartao estilo={[estilos.linha, { gap: espaco.md }]} aoPressionar={() => router.push('/integracoes')}>
@@ -66,34 +70,38 @@ export default function Equipe() {
                 {a.email ? ` · ${a.email}` : ''}
               </Text>
             </View>
-            <BotaoIcone
-              icone="trash-outline"
-              cor={cores.perigo}
-              rotulo={`Remover ${a.nome}`}
-              aoPressionar={() => confirmar('Remover advogado?', `${a.nome} sai da equipe.`, () => excluirAdvogado(a.id), 'Remover')}
-            />
+            {!escritorio && (
+              <BotaoIcone
+                icone="trash-outline"
+                cor={cores.perigo}
+                rotulo={`Remover ${a.nome}`}
+                aoPressionar={() => confirmar('Remover advogado?', `${a.nome} sai da equipe.`, () => excluirAdvogado(a.id), 'Remover')}
+              />
+            )}
           </Cartao>
         ))}
       </Secao>
 
-      <Secao titulo="Adicionar advogado">
-        <Cartao estilo={{ gap: espaco.md }}>
-          <Campo rotulo="Nome" value={nome} onChangeText={setNome} />
-          <Campo
-            rotulo="OAB"
-            value={oab}
-            onChangeText={(t) => {
-              setOab(t);
-              setErro(undefined);
-            }}
-            placeholder="Ex.: 12.345/ES"
-            autoCapitalize="characters"
-            erro={erro}
-          />
-          <Campo rotulo="E-mail (opcional)" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-          <Botao titulo="Adicionar à equipe" icone="person-add-outline" desabilitado={!nome.trim() || !oab.trim()} aoPressionar={adicionar} />
-        </Cartao>
-      </Secao>
+      {!escritorio && (
+        <Secao titulo="Adicionar advogado">
+          <Cartao estilo={{ gap: espaco.md }}>
+            <Campo rotulo="Nome" value={nome} onChangeText={setNome} />
+            <Campo
+              rotulo="OAB"
+              value={oab}
+              onChangeText={(t) => {
+                setOab(t);
+                setErro(undefined);
+              }}
+              placeholder="Ex.: 12.345/ES"
+              autoCapitalize="characters"
+              erro={erro}
+            />
+            <Campo rotulo="E-mail (opcional)" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+            <Botao titulo="Adicionar à equipe" icone="person-add-outline" desabilitado={!nome.trim() || !oab.trim()} aoPressionar={adicionar} />
+          </Cartao>
+        </Secao>
+      )}
     </Tela>
   );
 }

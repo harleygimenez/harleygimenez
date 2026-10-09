@@ -44,6 +44,9 @@ const PADROES_SEGREDO = [
   ['chave OpenAI/Anthropic', /\bsk-(?:ant-[a-z0-9]+-|proj-)?[0-9A-Za-z_-]{32,}/],
   ['chave privada', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ['segredo do Google OAuth', /GOCSPX-[0-9A-Za-z_-]{20,}/],
+  ['chave secreta do Supabase', /\bsb_secret_[0-9A-Za-z_-]{10,}/],
+  // JWT cujo conteúdo traz "role":"service_role" (eyJyb2xlIjoic2VydmljZV9yb2xl… em base64).
+  ['chave service_role do Supabase', /eyJ[\w-]*\.[\w-]*c2VydmljZV9yb2xl[\w-]*\.[\w-]+/],
   ['segredo atribuído no código', /\b(?:api[_-]?key|secret|password|senha|client[_-]?secret|token)\b\s*[:=]\s*['"`][^'"`\s]{16,}['"`]/i],
 ];
 
@@ -67,6 +70,7 @@ function varrerSegredos(lista, rotulo) {
 const codigo = [
   ...arquivos(join(raiz, 'src'), ['.ts', '.tsx', '.js']).filter((f) => !f.includes('__tests__')),
   ...arquivos(join(raiz, 'integracoes'), ['.js', '.mjs', '.json']),
+  ...arquivos(join(raiz, 'nuvem'), ['.sql', '.mjs', '.md', '.toml']),
   join(raiz, 'app.json'),
 ];
 varrerSegredos(codigo, 'código-fonte');
@@ -98,6 +102,23 @@ for (const [nome, padrao] of PERIGOSOS) {
 const store = ler(join(raiz, 'src/data/store.ts'));
 if (/integracao:\s*semTokens\(s\.integracao\)/.test(store)) ok('tokens dos webhooks fora do armazenamento persistido');
 else falha('partialize do store deve remover os tokens (semTokens)');
+
+const nuvem = ler(join(raiz, 'src/data/nuvem.ts'));
+const persistidoNuvem = nuvem.match(/partialize: \(s\) => \(\{([\s\S]*?)\}\)/)?.[1] ?? '';
+if (persistidoNuvem && !/sessao|token/i.test(persistidoNuvem)) ok('sessão do escritório (Supabase) fora do armazenamento persistido');
+else falha('src/data/nuvem.ts: partialize não pode incluir a sessão ou tokens');
+
+// RLS em todas as tabelas do banco do escritório (o teste completo é npm run testar:nuvem).
+for (const f of arquivos(join(raiz, 'nuvem/supabase/migrations'), ['.sql'])) {
+  const sql = ler(f).replace(/--.*$/gm, '');
+  const tabelas = [...sql.matchAll(/create table (?:if not exists )?([\w.]+)/gi)].map((m) => m[1]);
+  const semRls = tabelas.filter((t) => !new RegExp(`alter table ${t.replace('.', '\\.')} enable row level security`, 'i').test(sql));
+  const perigosas = [...sql.matchAll(/security definer(?![^;]*set search_path)/gi)].length;
+  if (semRls.length) falha(`${rel(f)}: tabelas sem RLS: ${semRls.join(', ')}`);
+  else if (perigosas) falha(`${rel(f)}: função SECURITY DEFINER sem search_path fixo`);
+  else if (/grant [^;]* to anon/i.test(sql)) falha(`${rel(f)}: permissão concedida ao papel anon`);
+  else ok(`${rel(f)}: RLS em ${tabelas.length} tabelas, funções com search_path fixo, nada para anon`);
+}
 
 if (/export function ErrorBoundary/.test(ler(join(raiz, 'src/app/_layout.tsx')))) ok('ErrorBoundary sem stack trace em produção');
 else falha('src/app/_layout.tsx deve exportar um ErrorBoundary próprio');

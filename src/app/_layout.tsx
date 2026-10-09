@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useSincronizacaoAutomatica } from '../data/sincronizacaoAutomatica';
 import { useDados } from '../data/store';
 import { cores } from '../tema';
 
@@ -37,6 +38,7 @@ const formulario = { presentation: 'modal' } as const;
 
 export default function Raiz() {
   const hidratado = useHidratado();
+  useSincronizacaoAutomatica();
 
   return (
     <SafeAreaProvider>
@@ -69,6 +71,8 @@ export default function Raiz() {
           <Stack.Screen name="documento/importar" options={formulario} />
           <Stack.Screen name="publicacoes" options={{ title: 'Publicações no Diário' }} />
           <Stack.Screen name="equipe" options={{ title: 'Equipe do escritório' }} />
+          <Stack.Screen name="conta" options={{ title: 'Conta e escritório' }} />
+          <Stack.Screen name="auth" options={{ headerShown: false }} />
         </Stack>
       ) : (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: cores.fundo }}>
