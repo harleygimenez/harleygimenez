@@ -155,17 +155,17 @@ describe('DataJud', () => {
 
 describe('caminhos e modelos do OneDrive', () => {
   it('normaliza caminhos', () => {
-    expect(normalizarCaminhoOneDrive('Causa\\Modelos\\')).toBe('/Causa/Modelos');
-    expect(normalizarCaminhoOneDrive(' /Causa//Documentos/ ')).toBe('/Causa/Documentos');
+    expect(normalizarCaminhoOneDrive('OpenJus\\Modelos\\')).toBe('/OpenJus/Modelos');
+    expect(normalizarCaminhoOneDrive(' /OpenJus//Documentos/ ')).toBe('/OpenJus/Documentos');
     expect(normalizarCaminhoOneDrive('/')).toBe('/');
     expect(normalizarCaminhoOneDrive('')).toBe('');
-    expect(normalizarCaminhoOneDrive('/Causa/../Segredos')).toBe('');
-    expect(normalizarCaminhoOneDrive('/Causa/a:b')).toBe('');
+    expect(normalizarCaminhoOneDrive('/OpenJus/../Segredos')).toBe('');
+    expect(normalizarCaminhoOneDrive('/OpenJus/a:b')).toBe('');
   });
 
   it('valida modelos por provedor', () => {
-    expect(validarModelo('onedrive', '/Causa/Modelos/Procuração.docx')).toBeNull();
-    expect(validarModelo('onedrive', '/Causa/Modelos/Procuração.pdf')).toMatch('.docx');
+    expect(validarModelo('onedrive', '/OpenJus/Modelos/Procuração.docx')).toBeNull();
+    expect(validarModelo('onedrive', '/OpenJus/Modelos/Procuração.pdf')).toMatch('.docx');
     expect(validarModelo('onedrive', '')).toMatch('caminho');
     expect(validarModelo('google', 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit')).toBeNull();
     expect(validarModelo('google', 'qualquer coisa')).toMatch('Google Docs');

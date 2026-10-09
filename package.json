@@ -1,5 +1,5 @@
 {
-  "name": "causa",
+  "name": "openjus",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
@@ -47,5 +47,7 @@
     "setupFiles": [
       "<rootDir>/jest.setup.ts"
     ]
-  }
+  },
+  "license": "MIT",
+  "author": "Harley Gimenez"
 }

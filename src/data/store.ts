@@ -256,7 +256,7 @@ export const useDados = create<Estado>()(
       },
     }),
     {
-      name: 'causa-dados',
+      name: 'openjus-dados',
       version: 3,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (salvo, versao) => migrarDados(salvo as Record<string, unknown>, versao) as unknown as Estado,

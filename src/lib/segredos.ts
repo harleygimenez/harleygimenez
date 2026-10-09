@@ -12,7 +12,7 @@ import type { Provedor } from '../data/types';
 
 export type Tokens = Record<Provedor, string>;
 
-const chave = (provedor: Provedor) => `causa.token.${provedor}`;
+const chave = (provedor: Provedor) => `openjus.token.${provedor}`;
 const PROVEDORES: Provedor[] = ['google', 'onedrive'];
 
 const web = {

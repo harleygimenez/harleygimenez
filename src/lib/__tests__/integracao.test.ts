@@ -82,7 +82,7 @@ describe('campos de mesclagem', () => {
 
 describe('cliente do n8n', () => {
   const config: Conexao = {
-    webhookUrl: 'https://n8n.exemplo.com/webhook/causa',
+    webhookUrl: 'https://n8n.exemplo.com/webhook/openjus',
     token: 'segredo',
     pastaDestinoId: ID,
     pastaImportacaoId: '',

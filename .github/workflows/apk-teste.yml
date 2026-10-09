@@ -68,7 +68,7 @@ jobs:
       - name: Nomear APK
         id: apk
         run: |
-          nome="causa-teste-${{ github.run_number }}.apk"
+          nome="openjus-teste-${{ github.run_number }}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$nome"
           echo "arquivo=$nome" >> "$GITHUB_OUTPUT"
           ls -lh "$nome"
@@ -86,5 +86,5 @@ jobs:
           gh release create "apk-teste-${{ github.run_number }}" "${{ steps.apk.outputs.arquivo }}" \
             --target "${{ github.sha }}" \
             --prerelease \
-            --title "Causa – APK de teste ${{ github.run_number }}" \
+            --title "OpenJus – APK de teste ${{ github.run_number }}" \
             --notes "APK de teste gerado a partir do commit ${{ github.sha }}. Assinado com chave de debug (não é para a Play Store). Para instalar: abra este link no celular Android, baixe o .apk e permita a instalação de fontes desconhecidas."

@@ -1,15 +1,15 @@
-// Testa a segurança de um webhook do Causa no n8n, sem alterar nada no Drive/OneDrive:
+// Testa a segurança de um webhook do OpenJus no n8n, sem alterar nada no Drive/OneDrive:
 // só envia ping, listagens e pedidos inválidos (que devem ser recusados).
 //
 // Uso:
-//   CAUSA_WEBHOOK=https://seu-n8n.com/webhook/causa CAUSA_TOKEN=... node integracoes/n8n/testar-seguranca.mjs
-// Opcional: CAUSA_ORIGEM_PERMITIDA=https://app.seu-dominio.com (origem web autorizada no CORS)
-//           CAUSA_PULAR_LIMITE=1 (não testa o limite de requisições, que envia ~70 chamadas)
+//   OPENJUS_WEBHOOK=https://seu-n8n.com/webhook/openjus OPENJUS_TOKEN=... node integracoes/n8n/testar-seguranca.mjs
+// Opcional: OPENJUS_ORIGEM_PERMITIDA=https://app.seu-dominio.com (origem web autorizada no CORS)
+//           OPENJUS_PULAR_LIMITE=1 (não testa o limite de requisições, que envia ~70 chamadas)
 
-const url = process.env.CAUSA_WEBHOOK;
-const token = process.env.CAUSA_TOKEN;
+const url = process.env.OPENJUS_WEBHOOK;
+const token = process.env.OPENJUS_TOKEN;
 if (!url || !token) {
-  console.error('Defina CAUSA_WEBHOOK e CAUSA_TOKEN.');
+  console.error('Defina OPENJUS_WEBHOOK e OPENJUS_TOKEN.');
   process.exit(2);
 }
 const onedrive = url.includes('onedrive');
@@ -23,7 +23,7 @@ function verificar(condicao, descricao, detalhe = '') {
 async function chamar(corpo, { cabecalhos = {}, comToken = true, bruto } = {}) {
   const resposta = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(comToken ? { 'X-Causa-Token': token } : {}), ...cabecalhos },
+    headers: { 'Content-Type': 'application/json', ...(comToken ? { 'X-OpenJus-Token': token } : {}), ...cabecalhos },
     body: bruto ?? JSON.stringify(corpo),
   });
   const texto = await resposta.text();
@@ -42,7 +42,7 @@ const semDetalhesInternos = (texto) => !/\bat .+:\d+:\d+|node_modules|Error: .+\
 {
   const semToken = await chamar({ acao: 'ping' }, { comToken: false });
   verificar(semToken.status === 401 || semToken.status === 403, 'recusa chamada sem token', `HTTP ${semToken.status}`);
-  const errado = await chamar({ acao: 'ping' }, { cabecalhos: { 'X-Causa-Token': `${token}x` } });
+  const errado = await chamar({ acao: 'ping' }, { cabecalhos: { 'X-OpenJus-Token': `${token}x` } });
   verificar(errado.status === 401 || errado.status === 403, 'recusa token errado', `HTTP ${errado.status}`);
   const ok = await chamar({ acao: 'ping' });
   verificar(ok.status === 200 && ok.json?.ok === true, 'aceita token correto', `HTTP ${ok.status} ${ok.texto}`);
@@ -55,17 +55,17 @@ const semDetalhesInternos = (texto) => !/\bat .+:\d+:\d+|node_modules|Error: .+\
     headers: {
       Origin: 'https://site-malicioso.exemplo',
       'Access-Control-Request-Method': 'POST',
-      'Access-Control-Request-Headers': 'content-type,x-causa-token',
+      'Access-Control-Request-Headers': 'content-type,x-openjus-token',
     },
   });
   const permitida = r.headers.get('access-control-allow-origin');
   verificar(permitida !== '*' && permitida !== 'https://site-malicioso.exemplo', 'CORS não libera origem desconhecida', `Access-Control-Allow-Origin: ${permitida}`);
-  if (process.env.CAUSA_ORIGEM_PERMITIDA) {
+  if (process.env.OPENJUS_ORIGEM_PERMITIDA) {
     const ok = await fetch(url, {
       method: 'OPTIONS',
-      headers: { Origin: process.env.CAUSA_ORIGEM_PERMITIDA, 'Access-Control-Request-Method': 'POST' },
+      headers: { Origin: process.env.OPENJUS_ORIGEM_PERMITIDA, 'Access-Control-Request-Method': 'POST' },
     });
-    verificar(ok.headers.get('access-control-allow-origin') === process.env.CAUSA_ORIGEM_PERMITIDA, 'CORS libera a origem do app web');
+    verificar(ok.headers.get('access-control-allow-origin') === process.env.OPENJUS_ORIGEM_PERMITIDA, 'CORS libera a origem do app web');
   }
 }
 
@@ -74,11 +74,11 @@ const invalidos = [
   ['ação desconhecida', { acao: 'apagar_tudo' }],
   ['ação gigante', { acao: 'x'.repeat(5000) }],
   ['pasta com injeção na consulta', { acao: 'listar_arquivos', pastaId: onedrive ? '/../../' : "x' in parents or '1'='1" }],
-  ['modelo com injeção', { acao: 'gerar_documento', modeloId: onedrive ? '/a/../b.docx' : "abc'; drop", pastaId: onedrive ? '/Causa' : 'pasta1234567', nomeArquivo: 'x', campos: { a: 'b' } }],
-  ['campos demais', { acao: 'gerar_documento', modeloId: onedrive ? '/m.docx' : 'modelo12345', pastaId: onedrive ? '/Causa' : 'pasta1234567', nomeArquivo: 'x', campos: Object.fromEntries(Array.from({ length: 150 }, (_, i) => [`c${i}`, 'v'])) }],
-  ['valor de campo gigante', { acao: 'gerar_documento', modeloId: onedrive ? '/m.docx' : 'modelo12345', pastaId: onedrive ? '/Causa' : 'pasta1234567', nomeArquivo: 'x', campos: { a: 'x'.repeat(20_000) } }],
-  ['nome de campo com código', { acao: 'gerar_documento', modeloId: onedrive ? '/m.docx' : 'modelo12345', pastaId: onedrive ? '/Causa' : 'pasta1234567', nomeArquivo: 'x', campos: { '<script>': 'x' } }],
-  ['campo com objeto', { acao: 'gerar_documento', modeloId: onedrive ? '/m.docx' : 'modelo12345', pastaId: onedrive ? '/Causa' : 'pasta1234567', nomeArquivo: 'x', campos: { a: { $ne: 1 } } }],
+  ['modelo com injeção', { acao: 'gerar_documento', modeloId: onedrive ? '/a/../b.docx' : "abc'; drop", pastaId: onedrive ? '/OpenJus' : 'pasta1234567', nomeArquivo: 'x', campos: { a: 'b' } }],
+  ['campos demais', { acao: 'gerar_documento', modeloId: onedrive ? '/m.docx' : 'modelo12345', pastaId: onedrive ? '/OpenJus' : 'pasta1234567', nomeArquivo: 'x', campos: Object.fromEntries(Array.from({ length: 150 }, (_, i) => [`c${i}`, 'v'])) }],
+  ['valor de campo gigante', { acao: 'gerar_documento', modeloId: onedrive ? '/m.docx' : 'modelo12345', pastaId: onedrive ? '/OpenJus' : 'pasta1234567', nomeArquivo: 'x', campos: { a: 'x'.repeat(20_000) } }],
+  ['nome de campo com código', { acao: 'gerar_documento', modeloId: onedrive ? '/m.docx' : 'modelo12345', pastaId: onedrive ? '/OpenJus' : 'pasta1234567', nomeArquivo: 'x', campos: { '<script>': 'x' } }],
+  ['campo com objeto', { acao: 'gerar_documento', modeloId: onedrive ? '/m.docx' : 'modelo12345', pastaId: onedrive ? '/OpenJus' : 'pasta1234567', nomeArquivo: 'x', campos: { a: { $ne: 1 } } }],
 ];
 for (const [descricao, corpo] of invalidos) {
   const r = await chamar(corpo);
@@ -98,7 +98,7 @@ for (const [descricao, corpo] of invalidos) {
 }
 
 // 4. Limite de requisições.
-if (!process.env.CAUSA_PULAR_LIMITE) {
+if (!process.env.OPENJUS_PULAR_LIMITE) {
   const respostas = [];
   for (let i = 0; i < 70; i++) respostas.push((await chamar({ acao: 'ping' })).status);
   verificar(respostas.includes(429), 'limita rajadas de requisições (HTTP 429)', `códigos: ${[...new Set(respostas)].join(', ')}`);

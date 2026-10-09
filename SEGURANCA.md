@@ -1,4 +1,4 @@
-# Segurança do Causa
+# Segurança do OpenJus
 
 Auditoria feita em 09/10/2026 sobre o app (Expo), os workflows do n8n (Google Drive/Docs e OneDrive/Word) e a integração com o DataJud. Além da revisão do código, os itens foram **testados na prática**: testes automatizados do app, ataques reais contra os workflows rodando num n8n 2.42 local (com APIs do Google e da Microsoft simuladas) e testes no navegador.
 
@@ -23,7 +23,7 @@ Auditoria feita em 09/10/2026 sobre o app (Expo), os workflows do n8n (Google Dr
 | 9 | CORS liberado | ✅ Corrigido | Os webhooks deixaram de aceitar qualquer origem: `allowedOrigins` fica em `http://localhost:8081` por padrão. Teste: o app aberto em outra origem foi bloqueado e na origem autorizada conectou. Apps Android/iOS não usam CORS. |
 | 10 | Sem e-mail verificado | ➖ Não se aplica | Não há cadastro de usuários. A exigência fica registrada para quando houver login. |
 | 11 | IDs previsíveis na URL | ✅ Corrigido | Os IDs passaram de `timestamp + Math.random` para **UUID v4 criptográfico** (`expo-crypto`). Os IDs nunca vão para um servidor, então não havia como explorar acesso indevido (IDOR); a troca é preventiva. |
-| 12 | Webhook não validado | ✅ Corrigido | O n8n exige o cabeçalho `X-Causa-Token`: sem token ou com token errado, responde 403 (testado). O app **recusa `http://`** fora da rede local, para o token não trafegar sem criptografia. |
+| 12 | Webhook não validado | ✅ Corrigido | O n8n exige o cabeçalho `X-OpenJus-Token`: sem token ou com token errado, responde 403 (testado). O app **recusa `http://`** fora da rede local, para o token não trafegar sem criptografia. |
 | 13 | Stack trace em produção | ⚠️ Encontrado e corrigido na configuração | **Achado real:** o n8n em modo de desenvolvimento devolve o stack trace completo (com caminhos do servidor) para um JSON malformado, **mesmo sem token**. A correção é rodar com `NODE_ENV=production`, que já é o padrão da imagem Docker oficial; o guia do n8n agora exige isso. Teste: em produção a resposta traz só a mensagem. No app, um `ErrorBoundary` próprio esconde os detalhes fora do modo de desenvolvimento, e os erros do Google e da Microsoft chegam resumidos. |
 | 14 | Dependências vulneráveis | ⚠️ Risco aceito, monitorado | O `npm audit` mostra 64 alertas, que vêm de 5 pacotes. Quatro (`braces`, `node-forge`, `sprintf-js`, `uuid`) são só de **ferramentas de build e teste** (Jest, Expo CLI, gerador do Xcode) e não entram no app. Um (`decode-uri-component`, via expo-router) **entra no app**: um link malicioso pode travá-lo, sem vazar dados. A correção oficial só existe no Expo SDK 58, e forçar a versão nova quebra a navegação (é só ESM). Plano: atualizar quando o SDK 58 for estável. O verificador **falha se surgir qualquer alerta novo**. |
 | 15 | Uploads sem validação | ✅ Sem problema | O app não envia arquivos do usuário; arquivos importados do Drive/OneDrive são só **links**. O único upload é o .docx gerado pelo n8n: o modelo precisa ser `.docx` e conter `word/document.xml`, a descompactação do n8n tem limite de tamanho e de quantidade de arquivos (proteção contra zip bomb), o nome do arquivo é saneado e o OneDrive **nunca sobrescreve** (`conflictBehavior=rename`). |
@@ -37,7 +37,7 @@ npx expo export -p web --output-dir dist && npm run seguranca -- dist
                                   # configuração dos workflows e dependências
 
 # Contra o seu n8n de verdade (não altera nada no Drive/OneDrive):
-CAUSA_WEBHOOK=https://seu-n8n.com/webhook/causa CAUSA_TOKEN=... \
+OPENJUS_WEBHOOK=https://seu-n8n.com/webhook/openjus OPENJUS_TOKEN=... \
   node integracoes/n8n/testar-seguranca.mjs
 ```
 
@@ -53,7 +53,7 @@ O `testar-seguranca.mjs` verifica:
 
 - [ ] n8n com `NODE_ENV=production` (padrão na imagem Docker oficial) e acessível só por **HTTPS**.
 - [ ] Token do webhook longo e aleatório (`openssl rand -hex 32`), diferente para cada escritório.
-- [ ] Se usar a versão web do app, trocar `allowedOrigins` no nó **Webhook do Causa** pelo domínio do app.
+- [ ] Se usar a versão web do app, trocar `allowedOrigins` no nó **Webhook do OpenJus** pelo domínio do app.
 - [ ] Preencher `CONFIG.pastaDestinoFixa` e `pastaImportacaoFixa` no nó **Validar pedido** para limitar o que um token vazado alcança.
 - [ ] De preferência, conectar uma conta Google/Microsoft dedicada ao escritório, só com as pastas necessárias.
 - [ ] Limitar tentativas por IP num proxy na frente do n8n (Cloudflare, nginx `limit_req`).

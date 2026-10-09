@@ -2,7 +2,7 @@ import type { ModeloDocumento, Provedor } from '../data/types';
 import { extrairIdGoogle, linkDocumentoGoogle } from './google';
 
 /**
- * Normaliza um caminho do OneDrive ("Causa\\Modelos\\" → "/Causa/Modelos").
+ * Normaliza um caminho do OneDrive ("OpenJus\\Modelos\\" → "/OpenJus/Modelos").
  * Retorna '' se tiver caracteres que o OneDrive não aceita ou "..".
  */
 export function normalizarCaminhoOneDrive(entrada: string): string {
@@ -21,7 +21,7 @@ export function identificarArquivo(provedor: Provedor, entrada: string): string 
 export function validarModelo(provedor: Provedor, entrada: string): string | null {
   const id = identificarArquivo(provedor, entrada);
   if (provedor === 'google') return id ? null : 'Cole o link do documento no Google Docs.';
-  if (!id || id === '/') return 'Informe o caminho do arquivo no OneDrive, como /Causa/Modelos/Procuracao.docx.';
+  if (!id || id === '/') return 'Informe o caminho do arquivo no OneDrive, como /OpenJus/Modelos/Procuracao.docx.';
   return /\.docx$/i.test(id) ? null : 'O modelo do OneDrive deve ser um arquivo .docx do Word.';
 }
 

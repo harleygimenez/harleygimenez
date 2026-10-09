@@ -1,5 +1,5 @@
-// Valida o pedido do app Causa e decide a rota. No OneDrive, modelos e pastas
-// são caminhos a partir da raiz do seu OneDrive, como "/Causa/Modelos/Procuracao.docx".
+// Valida o pedido do app OpenJus e decide a rota. No OneDrive, modelos e pastas
+// são caminhos a partir da raiz do seu OneDrive, como "/OpenJus/Modelos/Procuracao.docx".
 if (!limitarTaxa()) return muitasRequisicoes();
 const corpo = $input.first().json.body ?? {};
 const acao = String(corpo.acao ?? '');
@@ -19,7 +19,7 @@ if (acao === 'ping') {
 
 if (acao === 'listar_arquivos') {
   const pasta = CONFIG.pastaImportacaoFixa || (corpo.pastaId ? String(corpo.pastaId) : '/');
-  if (!ehCaminho(pasta)) return erro('Caminho de pasta inválido. Use algo como /Causa/Documentos.');
+  if (!ehCaminho(pasta)) return erro('Caminho de pasta inválido. Use algo como /OpenJus/Documentos.');
   const busca = String(corpo.busca ?? '').trim().slice(0, 100);
   const campos = '$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100';
   const url = busca
@@ -32,9 +32,9 @@ if (acao === 'gerar_documento') {
   const { modeloId, nomeArquivo, campos } = corpo;
   const pastaId = CONFIG.pastaDestinoFixa || corpo.pastaId;
   if (!ehCaminho(modeloId) || !/\.docx$/i.test(modeloId)) {
-    return erro('O modelo deve ser o caminho de um arquivo .docx no OneDrive, como /Causa/Modelos/Procuracao.docx.');
+    return erro('O modelo deve ser o caminho de um arquivo .docx no OneDrive, como /OpenJus/Modelos/Procuracao.docx.');
   }
-  if (!ehCaminho(pastaId)) return erro('Caminho da pasta de destino inválido. Use algo como /Causa/Documentos.');
+  if (!ehCaminho(pastaId)) return erro('Caminho da pasta de destino inválido. Use algo como /OpenJus/Documentos.');
   if (typeof nomeArquivo !== 'string' || !nomeArquivo.trim()) return erro('Informe o nome do arquivo.');
   const camposInvalidos = validarCampos(campos);
   if (camposInvalidos) return erro(camposInvalidos);

@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "Causa",
-    "slug": "causa",
+    "name": "OpenJus",
+    "slug": "openjus",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.causa.app"
+      "bundleIdentifier": "io.github.harleygimenez.openjus"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.causa.app",
+      "package": "io.github.harleygimenez.openjus",
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -33,7 +33,7 @@
       "expo-router",
       "expo-secure-store"
     ],
-    "scheme": "causa",
+    "scheme": "openjus",
     "experiments": {
       "typedRoutes": false
     }

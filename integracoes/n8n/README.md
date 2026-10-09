@@ -1,22 +1,22 @@
 # Integração com Google Drive/Docs e OneDrive/Word (via n8n)
 
-O app **Causa** usa workflows do [n8n](https://n8n.io) para:
+O app **OpenJus** usa workflows do [n8n](https://n8n.io) para:
 
 - **Importar arquivos** do Google Drive ou do OneDrive: buscar arquivos na sua conta e vinculá-los a um processo ou cliente.
 - **Gerar documentos a partir de modelos**: preencher campos como `{{cliente.nome}}` em um modelo do Google Docs ou do Word (.docx no OneDrive) e salvar o resultado em uma pasta específica.
 
-As credenciais do Google e da Microsoft ficam **só no n8n**. O app envia um token próprio no cabeçalho `X-Causa-Token` a cada chamada.
+As credenciais do Google e da Microsoft ficam **só no n8n**. O app envia um token próprio no cabeçalho `X-OpenJus-Token` a cada chamada.
 
 | Arquivo | Webhook | Serviço |
 | --- | --- | --- |
-| `causa-google-drive.json` | `/webhook/causa` | Google Drive API + Google Docs API |
-| `causa-onedrive.json` | `/webhook/causa-onedrive` | Microsoft Graph (OneDrive) |
+| `openjus-google-drive.json` | `/webhook/openjus` | Google Drive API + Google Docs API |
+| `openjus-onedrive.json` | `/webhook/openjus-onedrive` | Microsoft Graph (OneDrive) |
 
 Use um, o outro ou os dois. Cada um tem a sua seção em **Ajustes › Integrações**.
 
 ```
-App Causa ──POST /webhook/causa──────────▶ n8n ──▶ Google Drive API (listar, copiar) + Docs API (preencher)
-App Causa ──POST /webhook/causa-onedrive─▶ n8n ──▶ Graph: baixar .docx → preencher no n8n → enviar ao OneDrive
+App OpenJus ──POST /webhook/openjus──────────▶ n8n ──▶ Google Drive API (listar, copiar) + Docs API (preencher)
+App OpenJus ──POST /webhook/openjus-onedrive─▶ n8n ──▶ Graph: baixar .docx → preencher no n8n → enviar ao OneDrive
 ```
 
 # Google Drive e Google Docs
@@ -24,14 +24,14 @@ App Causa ──POST /webhook/causa-onedrive─▶ n8n ──▶ Graph: baixar .
 ## 1. Importar o workflow
 
 1. No n8n, crie um workflow novo e use **⋯ › Import from File**.
-2. Escolha `causa-google-drive.json` (nesta pasta).
+2. Escolha `openjus-google-drive.json` (nesta pasta).
 
 ## 2. Criar as credenciais
 
 **Token do app (Header Auth):**
 
-1. Abra o nó **Webhook do Causa** e, em *Credential for Header Auth*, crie uma nova credencial.
-2. **Name:** `X-Causa-Token`.
+1. Abra o nó **Webhook do OpenJus** e, em *Credential for Header Auth*, crie uma nova credencial.
+2. **Name:** `X-OpenJus-Token`.
 3. **Value:** um segredo longo, por exemplo o resultado de `openssl rand -hex 24`. Guarde-o para o app.
 
 **Google (OAuth2):**
@@ -41,7 +41,7 @@ App Causa ──POST /webhook/causa-onedrive─▶ n8n ──▶ Graph: baixar .
 
 ## 3. Ativar
 
-Salve e **ative** o workflow. A URL de produção aparece no nó **Webhook do Causa** (aba *Production URL*), por exemplo `https://seu-n8n.com/webhook/causa`.
+Salve e **ative** o workflow. A URL de produção aparece no nó **Webhook do OpenJus** (aba *Production URL*), por exemplo `https://seu-n8n.com/webhook/openjus`.
 
 ## 4. Configurar o app
 
@@ -73,19 +73,19 @@ A lista completa de campos aparece na tela de modelos do app. Campos sem valor f
 
 ## 1. Importar e configurar
 
-1. Importe `causa-onedrive.json` no n8n.
-2. No nó **Webhook do Causa**, use uma credencial *Header Auth* com **Name** `X-Causa-Token`. Pode ser a mesma do Google.
+1. Importe `openjus-onedrive.json` no n8n.
+2. No nó **Webhook do OpenJus**, use uma credencial *Header Auth* com **Name** `X-OpenJus-Token`. Pode ser a mesma do Google.
 3. No nó **Listar arquivos do OneDrive**, crie uma credencial **Microsoft Drive OAuth2 API** e entre com a conta Microsoft do escritório ([guia do n8n](https://docs.n8n.io/integrations/builtin/credentials/microsoft/)). A permissão padrão `Files.ReadWrite.All` é suficiente.
 4. Selecione a mesma credencial nos nós **Baixar modelo** e **Salvar no OneDrive**.
-5. Salve e ative. A URL de produção termina em `/webhook/causa-onedrive`.
+5. Salve e ative. A URL de produção termina em `/webhook/openjus-onedrive`.
 
 ## 2. Configurar o app
 
-Na seção **OneDrive** de **Ajustes › Integrações**, as pastas são **caminhos a partir da raiz do seu OneDrive**, por exemplo `/Causa/Documentos`.
+Na seção **OneDrive** de **Ajustes › Integrações**, as pastas são **caminhos a partir da raiz do seu OneDrive**, por exemplo `/OpenJus/Documentos`.
 
 ## 3. Modelos do Word
 
-1. Crie o modelo no Word com campos como `{{cliente.nome}}` (no corpo, em tabelas, no cabeçalho ou no rodapé) e salve como `.docx` no OneDrive, por exemplo em `/Causa/Modelos/Procuracao.docx`.
+1. Crie o modelo no Word com campos como `{{cliente.nome}}` (no corpo, em tabelas, no cabeçalho ou no rodapé) e salve como `.docx` no OneDrive, por exemplo em `/OpenJus/Modelos/Procuracao.docx`.
 2. No app, cadastre o modelo escolhendo **Word no OneDrive** e informe esse caminho.
 
 O workflow baixa o modelo, preenche os campos dentro do próprio n8n e envia o resultado à pasta de destino. Se já existir um arquivo com o mesmo nome, o OneDrive acrescenta um número. A formatação (negrito, fontes, tabelas) é mantida. O Word às vezes divide um campo em vários pedaços internos, por exemplo quando a correção ortográfica marca a palavra, e o preenchimento cuida disso. Mesmo assim, escreva cada campo de uma vez só, sem formatação diferente no meio.
@@ -96,19 +96,19 @@ O workflow baixa o modelo, preenche os campos dentro do próprio n8n e envia o r
 - **HTTPS obrigatório:** o app recusa `http://` fora da rede local.
 - **Token:** gere um valor longo e aleatório, por exemplo `openssl rand -hex 32`.
 - **Configuração no nó Validar pedido:** o bloco `CONFIG` no topo controla o limite de chamadas por minuto (padrão 60, depois disso HTTP 429) e as **pastas fixas** opcionais. Com as pastas fixas preenchidas, o workflow ignora as pastas enviadas pelo app, e um token vazado não alcança outras pastas.
-- **CORS:** o nó Webhook do Causa aceita só a origem `http://localhost:8081` (servidor de desenvolvimento do Expo web). Se publicar a versão web, troque em *Options › Allowed Origins (CORS)* pelo domínio dela. O app Android/iOS não depende disso.
+- **CORS:** o nó Webhook do OpenJus aceita só a origem `http://localhost:8081` (servidor de desenvolvimento do Expo web). Se publicar a versão web, troque em *Options › Allowed Origins (CORS)* pelo domínio dela. O app Android/iOS não depende disso.
 - **Proxy:** tentativas com token errado são recusadas antes do workflow e não entram no limite de chamadas. Para limitá-las também, use um proxy (Cloudflare, nginx `limit_req`).
 - **Teste do seu servidor:** depois de configurar, rode o teste a partir da raiz do repositório. Ele não altera nada no Drive/OneDrive.
 
   ```bash
-  CAUSA_WEBHOOK=https://seu-n8n.com/webhook/causa CAUSA_TOKEN=... node integracoes/n8n/testar-seguranca.mjs
+  OPENJUS_WEBHOOK=https://seu-n8n.com/webhook/openjus OPENJUS_TOKEN=... node integracoes/n8n/testar-seguranca.mjs
   ```
 
 # Detalhes técnicos
 
 ## Contrato do webhook
 
-Todas as chamadas são `POST` com JSON e o cabeçalho `X-Causa-Token`. Ações com dados inválidos respondem `400` com `{ "erro": "…" }`.
+Todas as chamadas são `POST` com JSON e o cabeçalho `X-OpenJus-Token`. Ações com dados inválidos respondem `400` com `{ "erro": "…" }`.
 
 | `acao` | Corpo | Resposta `200` |
 | --- | --- | --- |
@@ -116,7 +116,7 @@ Todas as chamadas são `POST` com JSON e o cabeçalho `X-Causa-Token`. Ações c
 | `listar_arquivos` | `busca?`, `pastaId?` | `{ "arquivos": [{ "id", "nome", "url", "mimeType", "modificadoEm" }] }` (até 50, mais recentes primeiro) |
 | `gerar_documento` | `modeloId`, `pastaId`, `nomeArquivo`, `campos: { "cliente.nome": "…" }` | `{ "arquivo": { "id", "nome", "url", "mimeType" } }` |
 
-No OneDrive, `modeloId` e `pastaId` são caminhos (`/Causa/Modelos/Procuracao.docx`, `/Causa/Documentos`) em vez de IDs.
+No OneDrive, `modeloId` e `pastaId` são caminhos (`/OpenJus/Modelos/Procuracao.docx`, `/OpenJus/Documentos`) em vez de IDs.
 
 Esse contrato permite trocar o n8n por outro backend (Make, Apps Script, servidor próprio) sem mudar o app.
 

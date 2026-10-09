@@ -1,4 +1,4 @@
-// Proteções comuns aos webhooks do Causa (embutidas no início do nó "Validar pedido").
+// Proteções comuns aos webhooks do OpenJus (embutidas no início do nó "Validar pedido").
 // CONFIG é definido logo abaixo, no próprio nó: ajuste ali os valores do seu escritório.
 
 // Limite de requisições por minuto, contado no n8n (os dados estáticos do workflow

@@ -7,7 +7,7 @@ import { ehLinkSeguro, validarUrlWebhook } from './urls';
  * elas ficam no n8n, e o app só envia um token próprio no cabeçalho.
  */
 
-export const CABECALHO_TOKEN = 'X-Causa-Token';
+export const CABECALHO_TOKEN = 'X-OpenJus-Token';
 
 export interface ArquivoDrive {
   id: string;
@@ -80,7 +80,7 @@ async function chamar<T>(config: Conexao, acao: string, dados: object, opcoes: O
 
 export async function testarConexao(config: Conexao, opcoes?: Opcoes): Promise<{ versao: number }> {
   const r = await chamar<{ ok?: boolean; versao?: number }>(config, 'ping', {}, opcoes);
-  if (!r.ok) throw new ErroIntegracao('Resposta inesperada do n8n. Importe o workflow do Causa no n8n.');
+  if (!r.ok) throw new ErroIntegracao('Resposta inesperada do n8n. Importe o workflow do OpenJus no n8n.');
   return { versao: r.versao ?? 0 };
 }
 

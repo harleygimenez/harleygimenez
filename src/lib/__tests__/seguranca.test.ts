@@ -11,17 +11,17 @@ const esperar = () => new Promise((r) => setTimeout(r, 0));
 describe('tokens fora do armazenamento comum (itens 7 e 8)', () => {
   it('guarda o token no cofre seguro e nunca no AsyncStorage/localStorage', async () => {
     useDados.getState().salvarIntegracao({
-      google: { ...conexaoVazia, webhookUrl: 'https://n8n.exemplo.com/webhook/causa', token: 'segredo-google-123' },
+      google: { ...conexaoVazia, webhookUrl: 'https://n8n.exemplo.com/webhook/openjus', token: 'segredo-google-123' },
       onedrive: { ...conexaoVazia, token: 'segredo-onedrive-456' },
       chaveDataJud: '',
     });
     await esperar();
-    const salvo = (await AsyncStorage.getItem('causa-dados')) ?? '';
+    const salvo = (await AsyncStorage.getItem('openjus-dados')) ?? '';
     expect(salvo).toContain('n8n.exemplo.com');
     expect(salvo).not.toContain('segredo-google-123');
     expect(salvo).not.toContain('segredo-onedrive-456');
-    expect(cofre.get('causa.token.google')).toBe('segredo-google-123');
-    expect(cofre.get('causa.token.onedrive')).toBe('segredo-onedrive-456');
+    expect(cofre.get('openjus.token.google')).toBe('segredo-google-123');
+    expect(cofre.get('openjus.token.onedrive')).toBe('segredo-onedrive-456');
     expect(useDados.getState().integracao.google.token).toBe('segredo-google-123');
   });
 
@@ -31,21 +31,21 @@ describe('tokens fora do armazenamento comum (itens 7 e 8)', () => {
       state: {
         iniciado: true,
         integracao: {
-          google: { ...conexaoVazia, webhookUrl: 'https://n8n/webhook/causa', token: 'token-legado' },
+          google: { ...conexaoVazia, webhookUrl: 'https://n8n/webhook/openjus', token: 'token-legado' },
           onedrive: conexaoVazia,
           chaveDataJud: '',
         },
       },
       version: 3,
     };
-    await AsyncStorage.setItem('causa-dados', JSON.stringify(antigo));
+    await AsyncStorage.setItem('openjus-dados', JSON.stringify(antigo));
     await useDados.persist.rehydrate();
     await esperar();
     await esperar();
-    expect(cofre.get('causa.token.google')).toBe('token-legado');
+    expect(cofre.get('openjus.token.google')).toBe('token-legado');
     expect(useDados.getState().integracao.google.token).toBe('token-legado');
     expect(useDados.getState().segredosCarregados).toBe(true);
-    expect(await AsyncStorage.getItem('causa-dados')).not.toContain('token-legado');
+    expect(await AsyncStorage.getItem('openjus-dados')).not.toContain('token-legado');
   });
 });
 
@@ -59,10 +59,10 @@ describe('IDs não previsíveis (item 11)', () => {
 
 describe('URLs (itens 6, 9 e 12)', () => {
   it('exige https no webhook, salvo na rede local', () => {
-    expect(validarUrlWebhook('https://n8n.escritorio.com.br/webhook/causa')).toBeNull();
-    expect(validarUrlWebhook('http://n8n.escritorio.com.br/webhook/causa')).toMatch('sem criptografia');
-    expect(validarUrlWebhook('http://192.168.0.10:5678/webhook/causa')).toBeNull();
-    expect(validarUrlWebhook('http://localhost:5678/webhook/causa')).toBeNull();
+    expect(validarUrlWebhook('https://n8n.escritorio.com.br/webhook/openjus')).toBeNull();
+    expect(validarUrlWebhook('http://n8n.escritorio.com.br/webhook/openjus')).toMatch('sem criptografia');
+    expect(validarUrlWebhook('http://192.168.0.10:5678/webhook/openjus')).toBeNull();
+    expect(validarUrlWebhook('http://localhost:5678/webhook/openjus')).toBeNull();
     expect(validarUrlWebhook('http://172.32.0.1/webhook')).toMatch('sem criptografia');
     expect(validarUrlWebhook('javascript:alert(1)')).toMatch('https://');
     expect(validarUrlWebhook('ftp://x')).toMatch('https://');
@@ -78,7 +78,7 @@ describe('URLs (itens 6, 9 e 12)', () => {
   });
 
   it('descarta itens maliciosos ou malformados vindos do n8n', async () => {
-    const config = { ...conexaoVazia, webhookUrl: 'https://n8n/webhook/causa', pastaDestinoId: 'pasta123456' };
+    const config = { ...conexaoVazia, webhookUrl: 'https://n8n/webhook/openjus', pastaDestinoId: 'pasta123456' };
     const resposta = (corpo: unknown) =>
       jest.fn().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(corpo)) });
     const arquivos = await listarArquivos(config, {}, {

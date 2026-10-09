@@ -52,7 +52,7 @@ export default function Inicio() {
     <Tela>
       <Tabs.Screen
         options={{
-          title: 'Causa',
+          title: 'OpenJus',
           headerRight: () => (
             <View style={{ marginRight: espaco.lg }}>
               <BotaoIcone icone="settings-outline" cor="#fff" rotulo="Ajustes" aoPressionar={() => router.push('/ajustes')} />

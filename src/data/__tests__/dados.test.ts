@@ -151,7 +151,7 @@ describe('store', () => {
 
   it('migra dados salvos pela versão anterior, sem documentos nem integração', async () => {
     const v1 = { clientes: [], atendimentos: [], processos: [], andamentos: [], compromissos: [], lancamentos: [], iniciado: true };
-    await AsyncStorage.setItem('causa-dados', JSON.stringify({ state: v1, version: 1 }));
+    await AsyncStorage.setItem('openjus-dados', JSON.stringify({ state: v1, version: 1 }));
     await useDados.persist.rehydrate();
     const estado = useDados.getState();
     expect(estado.documentos).toEqual([]);
@@ -174,7 +174,7 @@ describe('store', () => {
 describe('migração da versão 2', () => {
   it('separa a integração por provedor e marca modelos e documentos como do Google', () => {
     const v2 = {
-      integracao: { webhookUrl: 'https://n8n/webhook/causa', token: 't', pastaDestinoId: 'pasta123456', pastaImportacaoId: '' },
+      integracao: { webhookUrl: 'https://n8n/webhook/openjus', token: 't', pastaDestinoId: 'pasta123456', pastaImportacaoId: '' },
       modelos: [{ id: 'm1', nome: 'Procuração', googleDocId: 'doc1234567890', descricao: '' }],
       documentos: [{ id: 'd1', nome: 'Contrato', driveId: 'x', url: 'u', mimeType: 'm', origem: 'drive', criadoEm: '' }],
     };

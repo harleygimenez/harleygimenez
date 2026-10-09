@@ -19,14 +19,14 @@ type Rascunho = Conexao;
 
 const TEXTOS: Record<Provedor, { arquivo: string; pastaDestino: string; pastaImportacao: string; dicaPasta: string }> = {
   google: {
-    arquivo: 'causa-google-drive.json',
+    arquivo: 'openjus-google-drive.json',
     pastaDestino: 'Link da pasta no Google Drive',
     pastaImportacao: 'Vazio = buscar em todo o Drive',
     dicaPasta: 'Abra a pasta no Drive e copie o link do navegador.',
   },
   onedrive: {
-    arquivo: 'causa-onedrive.json',
-    pastaDestino: '/Causa/Documentos',
+    arquivo: 'openjus-onedrive.json',
+    pastaDestino: '/OpenJus/Documentos',
     pastaImportacao: 'Vazio = raiz do OneDrive',
     dicaPasta: 'Caminho a partir da raiz do seu OneDrive.',
   },
@@ -88,7 +88,7 @@ function SecaoConexao({
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
-          placeholder={`https://seu-n8n.com/webhook/${provedor === 'google' ? 'causa' : 'causa-onedrive'}`}
+          placeholder={`https://seu-n8n.com/webhook/${provedor === 'google' ? 'openjus' : 'openjus-onedrive'}`}
         />
         <Campo
           rotulo="Token"

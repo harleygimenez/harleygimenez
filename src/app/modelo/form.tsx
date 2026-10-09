@@ -68,7 +68,7 @@ export default function FormModelo() {
         onChangeText={setEntrada}
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder={google ? 'https://docs.google.com/document/d/…' : '/Causa/Modelos/Procuracao.docx'}
+        placeholder={google ? 'https://docs.google.com/document/d/…' : '/OpenJus/Modelos/Procuracao.docx'}
         erro={erros.arquivo}
         dica={
           google

@@ -105,7 +105,7 @@ else falha('src/app/_layout.tsx deve exportar um ErrorBoundary próprio');
 // ---------------------------------------------------------------------------
 // Workflows do n8n
 // ---------------------------------------------------------------------------
-for (const nome of ['causa-google-drive.json', 'causa-onedrive.json']) {
+for (const nome of ['openjus-google-drive.json', 'openjus-onedrive.json']) {
   const wf = JSON.parse(ler(join(raiz, 'integracoes/n8n', nome)));
   const nos = wf.nodes;
   const webhooks = nos.filter((n) => n.type === 'n8n-nodes-base.webhook');

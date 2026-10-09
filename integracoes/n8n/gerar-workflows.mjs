@@ -16,7 +16,7 @@ const mesclarDocx = ler('mesclarDocx.js').replace(/\nmodule\.exports = .*\n?$/, 
  * fora das pastas fixas (quando preenchidas).
  */
 function config(provedor) {
-  const exemplo = provedor === 'google' ? 'ID da pasta no Drive' : 'caminho, ex.: /Causa/Documentos';
+  const exemplo = provedor === 'google' ? 'ID da pasta no Drive' : 'caminho, ex.: /OpenJus/Documentos';
   return `// ===== Configuração de segurança (edite aqui) =====
 const CONFIG = {
   // Máximo de chamadas por minuto a este webhook (o excedente recebe HTTP 429).
@@ -41,7 +41,7 @@ const SERVICOS = {
   },
   onedrive: {
     nome: 'O OneDrive',
-    dica404: 'Confira o caminho do modelo e da pasta (ex.: /Causa/Modelos/Procuracao.docx) na conta Microsoft conectada ao n8n.',
+    dica404: 'Confira o caminho do modelo e da pasta (ex.: /OpenJus/Modelos/Procuracao.docx) na conta Microsoft conectada ao n8n.',
     dica403: 'Verifique a credencial Microsoft Drive no n8n e se ela tem permissão Files.ReadWrite.All.',
   },
 };
@@ -111,7 +111,7 @@ function webhook(caminho, idBase) {
       options: { allowedOrigins: ORIGENS_PERMITIDAS },
     },
     id: `${idBase}0001`,
-    name: 'Webhook do Causa',
+    name: 'Webhook do OpenJus',
     type: 'n8n-nodes-base.webhook',
     typeVersion: 2,
     position: [0, 300],
@@ -152,7 +152,7 @@ function workflowGoogle() {
   const b = '6f1c2a10-0001-4c1a-9b10-c0ffee00';
   const cred = 'googleDocsOAuth2Api';
   const nodes = [
-    webhook('causa', b),
+    webhook('openjus', b),
     validar('google', b),
     rota(b),
     responder('Responder ping', `${b}0004`, [680, 0], 200),
@@ -191,7 +191,7 @@ function workflowGoogle() {
     ...explicarErro('google', b),
   ];
   const connections = {
-    'Webhook do Causa': { main: [liga('Validar pedido')] },
+    'Webhook do OpenJus': { main: [liga('Validar pedido')] },
     'Validar pedido': { main: [liga('Rota')] },
     Rota: {
       main: [liga('Responder ping'), liga('Listar arquivos do Drive'), liga('Copiar modelo'), liga('Responder erro'), liga('Responder limite')],
@@ -203,14 +203,14 @@ function workflowGoogle() {
     'Formatar documento': { main: [liga('Responder documento')] },
     'Explicar erro': { main: [liga('Responder erro do serviço')] },
   };
-  return { name: 'Causa - Google Drive e Docs', nodes, connections };
+  return { name: 'OpenJus - Google Drive e Docs', nodes, connections };
 }
 
 function workflowOneDrive() {
   const b = '7a2d3b20-0002-4d2b-8c20-c0ffee00';
   const cred = 'microsoftOneDriveOAuth2Api';
   const nodes = [
-    webhook('causa-onedrive', b),
+    webhook('openjus-onedrive', b),
     validar('onedrive', b),
     rota(b),
     responder('Responder ping', `${b}0004`, [680, 0], 200),
@@ -258,7 +258,7 @@ function workflowOneDrive() {
     ...explicarErro('onedrive', b),
   ];
   const connections = {
-    'Webhook do Causa': { main: [liga('Validar pedido')] },
+    'Webhook do OpenJus': { main: [liga('Validar pedido')] },
     'Validar pedido': { main: [liga('Rota')] },
     Rota: {
       main: [liga('Responder ping'), liga('Listar arquivos do OneDrive'), liga('Baixar modelo'), liga('Responder erro'), liga('Responder limite')],
@@ -274,12 +274,12 @@ function workflowOneDrive() {
     'Formatar documento': { main: [liga('Responder documento')] },
     'Explicar erro': { main: [liga('Responder erro do serviço')] },
   };
-  return { name: 'Causa - OneDrive e Word', nodes, connections };
+  return { name: 'OpenJus - OneDrive e Word', nodes, connections };
 }
 
 for (const [arquivo, workflow] of [
-  ['causa-google-drive.json', workflowGoogle()],
-  ['causa-onedrive.json', workflowOneDrive()],
+  ['openjus-google-drive.json', workflowGoogle()],
+  ['openjus-onedrive.json', workflowOneDrive()],
 ]) {
   const completo = { ...workflow, settings: { executionOrder: 'v1' }, pinData: {}, active: false };
   writeFileSync(join(pasta, arquivo), `${JSON.stringify(completo, null, 2)}\n`);

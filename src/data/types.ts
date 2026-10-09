@@ -161,7 +161,7 @@ export type Provedor = keyof typeof PROVEDORES;
 
 /**
  * Documento usado como modelo, com campos {{chave}} a mesclar: no Google, o ID
- * de um Google Docs; no OneDrive, o caminho de um .docx (ex.: /Causa/Modelos/Procuracao.docx).
+ * de um Google Docs; no OneDrive, o caminho de um .docx (ex.: /OpenJus/Modelos/Procuracao.docx).
  */
 export interface ModeloDocumento {
   id: string;

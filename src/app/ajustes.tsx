@@ -81,7 +81,7 @@ export default function Ajustes() {
         />
       </Secao>
 
-      <Text style={[estilos.textoSuave, { textAlign: 'center' }]}>Causa · versão {Constants.expoConfig?.version}</Text>
+      <Text style={[estilos.textoSuave, { textAlign: 'center' }]}>OpenJus · versão {Constants.expoConfig?.version} · software livre (licença MIT)</Text>
     </Tela>
   );
 }

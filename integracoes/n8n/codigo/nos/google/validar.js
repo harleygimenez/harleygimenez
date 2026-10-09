@@ -1,4 +1,4 @@
-// Valida o pedido do app Causa e decide a rota.
+// Valida o pedido do app OpenJus e decide a rota.
 if (!limitarTaxa()) return muitasRequisicoes();
 const corpo = $input.first().json.body ?? {};
 const acao = String(corpo.acao ?? '');
