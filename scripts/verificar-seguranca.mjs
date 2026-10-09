@@ -44,7 +44,9 @@ const PADROES_SEGREDO = [
   ['chave OpenAI/Anthropic', /\bsk-(?:ant-[a-z0-9]+-|proj-)?[0-9A-Za-z_-]{32,}/],
   ['chave privada', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ['segredo do Google OAuth', /GOCSPX-[0-9A-Za-z_-]{20,}/],
-  ['chave secreta do Supabase', /\bsb_secret_[0-9A-Za-z_-]{10,}/],
+  // A chave real tem 20+ caracteres aleatórios após o prefixo. O "_" logo depois evita o falso
+  // positivo do bundle Hermes, que guarda as strings coladas (ex.: "sb_secret_" + "_self…").
+  ['chave secreta do Supabase', /\bsb_secret_[0-9A-Za-z-][0-9A-Za-z_-]{19,}/],
   // JWT cujo conteúdo traz "role":"service_role" (eyJyb2xlIjoic2VydmljZV9yb2xl… em base64).
   ['chave service_role do Supabase', /eyJ[\w-]*\.[\w-]*c2VydmljZV9yb2xl[\w-]*\.[\w-]+/],
   ['segredo atribuído no código', /\b(?:api[_-]?key|secret|password|senha|client[_-]?secret|token)\b\s*[:=]\s*['"`][^'"`\s]{16,}['"`]/i],
