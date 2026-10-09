@@ -2,31 +2,38 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
 import { Formulario } from '../../components/Formulario';
-import { Campo } from '../../components/ui';
+import { Campo, Seletor } from '../../components/ui';
 import { useDados } from '../../data/store';
-import { extrairIdGoogle, linkDocumentoGoogle } from '../../lib/google';
+import { PROVEDORES, type Provedor } from '../../data/types';
+import { entradaDoModelo, identificarArquivo, validarModelo } from '../../lib/armazenamento';
 
 export default function FormModelo() {
   const params = useLocalSearchParams<{ id?: string }>();
   const existente = useDados((s) => s.modelos.find((m) => m.id === params.id));
+  const integracao = useDados((s) => s.integracao);
   const salvarModelo = useDados((s) => s.salvarModelo);
   const excluirModelo = useDados((s) => s.excluirModelo);
 
+  // Sugere o provedor já configurado quando só um deles está.
+  const padrao: Provedor = !integracao.google.webhookUrl && integracao.onedrive.webhookUrl ? 'onedrive' : 'google';
+  const [provedor, setProvedor] = useState<Provedor>(existente?.provedor ?? padrao);
   const [nome, setNome] = useState(existente?.nome ?? '');
-  const [link, setLink] = useState(existente ? linkDocumentoGoogle(existente.googleDocId) : '');
+  const [entrada, setEntrada] = useState(existente ? entradaDoModelo(existente) : '');
   const [descricao, setDescricao] = useState(existente?.descricao ?? '');
   const [erros, setErros] = useState<Record<string, string>>({});
 
-  const docId = extrairIdGoogle(link);
+  const arquivoId = identificarArquivo(provedor, entrada);
+  const google = provedor === 'google';
 
   function salvar() {
     const novosErros: Record<string, string> = {};
     if (!nome.trim()) novosErros.nome = 'Informe um nome.';
-    if (!docId) novosErros.link = 'Cole o link do documento no Google Docs.';
+    const invalido = validarModelo(provedor, entrada);
+    if (invalido) novosErros.arquivo = invalido;
     setErros(novosErros);
     if (Object.keys(novosErros).length > 0) return;
 
-    salvarModelo({ id: existente?.id, nome: nome.trim(), googleDocId: docId, descricao: descricao.trim() });
+    salvarModelo({ id: existente?.id, nome: nome.trim(), provedor, arquivoId, descricao: descricao.trim() });
     router.back();
   }
 
@@ -36,7 +43,7 @@ export default function FormModelo() {
       aoSalvar={salvar}
       exclusao={
         existente && {
-          pergunta: 'O modelo sai da lista do app. O documento continua no seu Google Drive.',
+          pergunta: `O modelo sai da lista do app. O arquivo continua no seu ${PROVEDORES[existente.provedor].nome}.`,
           aoExcluir: () => {
             excluirModelo(existente.id);
             router.back();
@@ -44,16 +51,32 @@ export default function FormModelo() {
         }
       }
     >
+      <Seletor<Provedor>
+        rotulo="Onde está o modelo"
+        opcoes={(Object.keys(PROVEDORES) as Provedor[]).map((p) => ({ valor: p, rotulo: PROVEDORES[p].modelo }))}
+        valor={provedor}
+        aoMudar={(p) => {
+          setProvedor(p);
+          setEntrada('');
+          setErros({});
+        }}
+      />
       <Campo rotulo="Nome *" value={nome} onChangeText={setNome} placeholder="Ex.: Procuração ad judicia" erro={erros.nome} />
       <Campo
-        rotulo="Link do Google Docs *"
-        value={link}
-        onChangeText={setLink}
+        rotulo={google ? 'Link do Google Docs *' : 'Caminho do .docx no OneDrive *'}
+        value={entrada}
+        onChangeText={setEntrada}
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder="https://docs.google.com/document/d/…"
-        erro={erros.link}
-        dica={docId ? `ID do documento: ${docId}` : 'No Google Docs, use Compartilhar › Copiar link.'}
+        placeholder={google ? 'https://docs.google.com/document/d/…' : '/Causa/Modelos/Procuracao.docx'}
+        erro={erros.arquivo}
+        dica={
+          google
+            ? arquivoId
+              ? `ID do documento: ${arquivoId}`
+              : 'No Google Docs, use Compartilhar › Copiar link.'
+            : 'Caminho a partir da raiz do seu OneDrive. Escreva os campos no Word como {{cliente.nome}}.'
+        }
       />
       <Campo rotulo="Descrição" value={descricao} onChangeText={setDescricao} multiline />
     </Formulario>

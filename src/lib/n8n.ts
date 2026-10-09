@@ -1,8 +1,8 @@
-import type { Integracao } from '../data/types';
+import type { Conexao } from '../data/types';
 
 /**
- * Cliente do webhook do n8n que faz a ponte com o Google Drive e o Google Docs
- * (workflow em integracoes/n8n/). O app nunca guarda credenciais do Google:
+ * Cliente dos webhooks do n8n que fazem a ponte com o Google Drive/Docs e com o OneDrive
+ * (workflows em integracoes/n8n/). O app nunca guarda credenciais do Google ou da Microsoft:
  * elas ficam no n8n, e o app só envia um token próprio no cabeçalho.
  */
 
@@ -23,13 +23,13 @@ interface Opcoes {
   timeoutMs?: number;
 }
 
-export function validarIntegracao(config: Pick<Integracao, 'webhookUrl'>): string | null {
-  if (!config.webhookUrl.trim()) return 'Informe a URL do webhook do n8n em Ajustes > Integrações.';
+export function validarIntegracao(config: Pick<Conexao, 'webhookUrl'>): string | null {
+  if (!config.webhookUrl.trim()) return 'Informe a URL do webhook do n8n em Ajustes › Integrações.';
   if (!/^https?:\/\/[^\s/]+/i.test(config.webhookUrl.trim())) return 'A URL do webhook deve começar com https://';
   return null;
 }
 
-async function chamar<T>(config: Integracao, acao: string, dados: object, opcoes: Opcoes = {}): Promise<T> {
+async function chamar<T>(config: Conexao, acao: string, dados: object, opcoes: Opcoes = {}): Promise<T> {
   const invalida = validarIntegracao(config);
   if (invalida) throw new ErroIntegracao(invalida);
 
@@ -67,7 +67,7 @@ async function chamar<T>(config: Integracao, acao: string, dados: object, opcoes
   if (!resposta.ok) {
     if (typeof mensagem === 'string') throw new ErroIntegracao(mensagem);
     if (resposta.status === 401 || resposta.status === 403) {
-      throw new ErroIntegracao('O n8n recusou o token. Confira o token em Ajustes > Integrações.');
+      throw new ErroIntegracao('O n8n recusou o token. Confira o token em Ajustes › Integrações.');
     }
     if (resposta.status === 404) {
       throw new ErroIntegracao('Webhook não encontrado. Confira a URL e se o workflow está ativo no n8n.');
@@ -78,14 +78,14 @@ async function chamar<T>(config: Integracao, acao: string, dados: object, opcoes
   return json as T;
 }
 
-export async function testarConexao(config: Integracao, opcoes?: Opcoes): Promise<{ versao: number }> {
+export async function testarConexao(config: Conexao, opcoes?: Opcoes): Promise<{ versao: number }> {
   const r = await chamar<{ ok?: boolean; versao?: number }>(config, 'ping', {}, opcoes);
-  if (!r.ok) throw new ErroIntegracao('Resposta inesperada do n8n. Importe o workflow do Causa.');
+  if (!r.ok) throw new ErroIntegracao('Resposta inesperada do n8n. Importe o workflow do Causa no n8n.');
   return { versao: r.versao ?? 0 };
 }
 
 export async function listarArquivos(
-  config: Integracao,
+  config: Conexao,
   filtro: { busca?: string; pastaId?: string },
   opcoes?: Opcoes,
 ): Promise<ArquivoDrive[]> {
@@ -100,12 +100,12 @@ export async function listarArquivos(
 }
 
 export async function gerarDocumento(
-  config: Integracao,
+  config: Conexao,
   pedido: { modeloId: string; nomeArquivo: string; campos: Record<string, string> },
   opcoes?: Opcoes,
 ): Promise<ArquivoDrive> {
   if (!config.pastaDestinoId) {
-    throw new ErroIntegracao('Escolha a pasta do Drive para documentos gerados em Ajustes > Integrações.');
+    throw new ErroIntegracao('Escolha a pasta para documentos gerados em Ajustes › Integrações.');
   }
   const r = await chamar<{ arquivo?: ArquivoDrive }>(
     config,

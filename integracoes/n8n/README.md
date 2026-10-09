@@ -1,16 +1,25 @@
-# Integração com Google Drive e Google Docs (via n8n)
+# Integração com Google Drive/Docs e OneDrive/Word (via n8n)
 
-O app **Causa** usa um workflow do [n8n](https://n8n.io) para:
+O app **Causa** usa workflows do [n8n](https://n8n.io) para:
 
-- **Importar arquivos do Google Drive**: buscar arquivos na sua conta e vinculá-los a um processo ou cliente.
-- **Gerar documentos a partir de modelos do Google Docs**: copiar um modelo, preencher campos como `{{cliente.nome}}` e salvar o resultado em uma pasta específica do Drive.
+- **Importar arquivos** do Google Drive ou do OneDrive: buscar arquivos na sua conta e vinculá-los a um processo ou cliente.
+- **Gerar documentos a partir de modelos**: preencher campos como `{{cliente.nome}}` em um modelo do Google Docs ou do Word (.docx no OneDrive) e salvar o resultado em uma pasta específica.
 
-As credenciais do Google ficam **só no n8n**. O app envia um token próprio no cabeçalho `X-Causa-Token` a cada chamada.
+As credenciais do Google e da Microsoft ficam **só no n8n**. O app envia um token próprio no cabeçalho `X-Causa-Token` a cada chamada.
+
+| Arquivo | Webhook | Serviço |
+| --- | --- | --- |
+| `causa-google-drive.json` | `/webhook/causa` | Google Drive API + Google Docs API |
+| `causa-onedrive.json` | `/webhook/causa-onedrive` | Microsoft Graph (OneDrive) |
+
+Use um, o outro ou os dois. Cada um tem a sua seção em **Ajustes › Integrações**.
 
 ```
-App Causa ──POST /webhook/causa──▶ n8n ──▶ Google Drive API (listar, copiar)
-          ◀──────── JSON ────────       └─▶ Google Docs API (preencher campos)
+App Causa ──POST /webhook/causa──────────▶ n8n ──▶ Google Drive API (listar, copiar) + Docs API (preencher)
+App Causa ──POST /webhook/causa-onedrive─▶ n8n ──▶ Graph: baixar .docx → preencher no n8n → enviar ao OneDrive
 ```
+
+# Google Drive e Google Docs
 
 ## 1. Importar o workflow
 
@@ -56,9 +65,32 @@ Toque em **Testar conexão**. Preencha também **Seus dados nos documentos** (no
    > {{advogado.cidade}}, {{data.extenso}}.
 
 2. No app, vá em **Ajustes › Modelos de documentos › +** e cole o link do documento.
-3. Para gerar, abra um processo ou cliente e toque em **Gerar de modelo**.
+3. Para gerar, abra um processo ou cliente e, em Documentos, toque em **Gerar**.
 
 A lista completa de campos aparece na tela de modelos do app. Campos sem valor ficam em branco.
+
+# OneDrive e Word
+
+## 1. Importar e configurar
+
+1. Importe `causa-onedrive.json` no n8n.
+2. No nó **Webhook do Causa**, use uma credencial *Header Auth* com **Name** `X-Causa-Token`. Pode ser a mesma do Google.
+3. No nó **Listar arquivos do OneDrive**, crie uma credencial **Microsoft Drive OAuth2 API** e entre com a conta Microsoft do escritório ([guia do n8n](https://docs.n8n.io/integrations/builtin/credentials/microsoft/)). A permissão padrão `Files.ReadWrite.All` é suficiente.
+4. Selecione a mesma credencial nos nós **Baixar modelo** e **Salvar no OneDrive**.
+5. Salve e ative. A URL de produção termina em `/webhook/causa-onedrive`.
+
+## 2. Configurar o app
+
+Na seção **OneDrive** de **Ajustes › Integrações**, as pastas são **caminhos a partir da raiz do seu OneDrive**, por exemplo `/Causa/Documentos`.
+
+## 3. Modelos do Word
+
+1. Crie o modelo no Word com campos como `{{cliente.nome}}` (no corpo, em tabelas, no cabeçalho ou no rodapé) e salve como `.docx` no OneDrive, por exemplo em `/Causa/Modelos/Procuracao.docx`.
+2. No app, cadastre o modelo escolhendo **Word no OneDrive** e informe esse caminho.
+
+O workflow baixa o modelo, preenche os campos dentro do próprio n8n e envia o resultado à pasta de destino. Se já existir um arquivo com o mesmo nome, o OneDrive acrescenta um número. A formatação (negrito, fontes, tabelas) é mantida. O Word às vezes divide um campo em vários pedaços internos, por exemplo quando a correção ortográfica marca a palavra, e o preenchimento cuida disso. Mesmo assim, escreva cada campo de uma vez só, sem formatação diferente no meio.
+
+# Detalhes técnicos
 
 ## Contrato do webhook
 
@@ -70,10 +102,24 @@ Todas as chamadas são `POST` com JSON e o cabeçalho `X-Causa-Token`. Ações c
 | `listar_arquivos` | `busca?`, `pastaId?` | `{ "arquivos": [{ "id", "nome", "url", "mimeType", "modificadoEm" }] }` (até 50, mais recentes primeiro) |
 | `gerar_documento` | `modeloId`, `pastaId`, `nomeArquivo`, `campos: { "cliente.nome": "…" }` | `{ "arquivo": { "id", "nome", "url", "mimeType" } }` |
 
+No OneDrive, `modeloId` e `pastaId` são caminhos (`/Causa/Modelos/Procuracao.docx`, `/Causa/Documentos`) em vez de IDs.
+
 Esse contrato permite trocar o n8n por outro backend (Make, Apps Script, servidor próprio) sem mudar o app.
+
+## Alterar os workflows
+
+O código dos nós está em `codigo/`, e os arquivos `.json` são gerados a partir dele. Para mudar um workflow, edite o código e rode:
+
+```bash
+node integracoes/n8n/gerar-workflows.mjs
+```
+
+O preenchimento de campos do Word (`codigo/mesclarDocx.js`) é testado pelo Jest do app (`npm test`).
 
 ## Problemas comuns
 
 - **"O n8n recusou o token"**: o token do app não bate com o *Value* da credencial Header Auth.
 - **"Webhook não encontrado"**: o workflow não está ativo, ou foi usada a URL de teste (`/webhook-test/…`) em vez da de produção.
-- **"O n8n respondeu com erro 500"**: veja a execução no n8n. O mais comum é a conta Google não ter acesso ao modelo ou à pasta, ou as APIs Drive e Docs não estarem ativadas no Google Cloud.
+- **"O Google/OneDrive recusou o pedido (404)"**: o modelo ou a pasta não existe, ou a conta conectada ao n8n não tem acesso a ele.
+- **"O Google recusou o pedido (403)"**: a credencial não tem permissão, ou as APIs Drive e Docs não estão ativadas no Google Cloud.
+- **"O n8n respondeu com erro 500"**: veja a execução no n8n para detalhes.

@@ -37,10 +37,14 @@ export default function Ajustes() {
         </Cartao>
       </Secao>
 
-      <Secao titulo="Google Drive e Google Docs">
+      <Secao titulo="Integrações">
         <Botao
-          titulo={integracao.webhookUrl ? 'Integrações (n8n conectado)' : 'Conectar pelo n8n'}
-          icone="logo-google"
+          titulo={
+            [integracao.google.webhookUrl && 'Google Drive', integracao.onedrive.webhookUrl && 'OneDrive']
+              .filter(Boolean)
+              .join(' e ') || 'Google Drive, OneDrive e DataJud'
+          }
+          icone="link-outline"
           variante="secundario"
           aoPressionar={() => router.push('/integracoes')}
         />

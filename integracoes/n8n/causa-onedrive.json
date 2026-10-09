@@ -1,0 +1,489 @@
+{
+  "name": "Causa - OneDrive e Word",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "causa-onedrive",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000001",
+      "name": "Webhook do Causa",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "7a2d3b20-0002-4d2b-8c20-c0ffee0000ff"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida o pedido do app Causa e decide a rota. No OneDrive, modelos e pastas\n// são caminhos a partir da raiz do seu OneDrive, como \"/Causa/Modelos/Procuracao.docx\".\nconst corpo = $input.first().json.body ?? {};\nconst acao = String(corpo.acao ?? '');\nconst GRAPH = 'https://graph.microsoft.com/v1.0/me/drive';\nconst erro = (mensagem) => [{ json: { rota: 'erro', resposta: { erro: mensagem } } }];\n\n// Caminho absoluto, sem \"..\", sem caracteres proibidos no OneDrive.\nconst ehCaminho = (v) =>\n  typeof v === 'string' && /^\\/[^\"*:<>?\\\\|#%]*$/.test(v) && !v.split('/').some((p) => p === '..' || p === '.');\nconst codificar = (caminho) =>\n  caminho.split('/').filter(Boolean).map(encodeURIComponent).join('/');\nconst itemDoCaminho = (caminho) => (codificar(caminho) ? `${GRAPH}/root:/${codificar(caminho)}:` : `${GRAPH}/root`);\n\nif (acao === 'ping') {\n  return [{ json: { rota: 'ping', resposta: { ok: true, versao: 1, provedor: 'onedrive' } } }];\n}\n\nif (acao === 'listar_arquivos') {\n  const pasta = corpo.pastaId ? String(corpo.pastaId) : '/';\n  if (!ehCaminho(pasta)) return erro('Caminho de pasta inválido. Use algo como /Causa/Documentos.');\n  const busca = String(corpo.busca ?? '').trim().slice(0, 100);\n  const campos = '$select=id,name,webUrl,file,folder,lastModifiedDateTime&$top=100';\n  const url = busca\n    ? `${itemDoCaminho(pasta)}/search(q='${encodeURIComponent(busca.replace(/'/g, \"''\"))}')?${campos}`\n    : `${itemDoCaminho(pasta)}/children?${campos}`;\n  return [{ json: { rota: 'listar_arquivos', url } }];\n}\n\nif (acao === 'gerar_documento') {\n  const { modeloId, pastaId, nomeArquivo, campos } = corpo;\n  if (!ehCaminho(modeloId) || !/\\.docx$/i.test(modeloId)) {\n    return erro('O modelo deve ser o caminho de um arquivo .docx no OneDrive, como /Causa/Modelos/Procuracao.docx.');\n  }\n  if (!ehCaminho(pastaId)) return erro('Caminho da pasta de destino inválido. Use algo como /Causa/Documentos.');\n  if (typeof nomeArquivo !== 'string' || !nomeArquivo.trim()) return erro('Informe o nome do arquivo.');\n  if (!campos || typeof campos !== 'object' || Array.isArray(campos)) return erro('Campos de mesclagem inválidos.');\n\n  const nome = `${nomeArquivo.trim().replace(/[\\\\/\"*:<>?|#%]/g, '-').slice(0, 200)}.docx`;\n  const destino = `${pastaId.replace(/\\/+$/, '')}/${nome}`;\n  return [{\n    json: {\n      rota: 'gerar_documento',\n      urlModelo: `${itemDoCaminho(modeloId)}/content`,\n      urlDestino: `${itemDoCaminho(destino)}/content?@microsoft.graph.conflictBehavior=rename`,\n      nome,\n      campos,\n    },\n  }];\n}\n\nreturn erro(`Ação desconhecida: ${acao || '(vazia)'}`);\n"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000002",
+      "name": "Validar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 4,
+        "output": "={{ ['ping', 'listar_arquivos', 'gerar_documento', 'erro'].indexOf($json.rota) }}"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000003",
+      "name": "Rota",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000004",
+      "name": "Responder ping",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {}
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000005",
+      "name": "Listar arquivos do OneDrive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        200
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const arquivos = ($input.first().json.value ?? [])\n  .filter((f) => !f.folder)\n  .sort((a, b) => String(b.lastModifiedDateTime).localeCompare(String(a.lastModifiedDateTime)))\n  .slice(0, 50)\n  .map((f) => ({\n    id: f.id,\n    nome: f.name,\n    url: f.webUrl,\n    mimeType: f.file?.mimeType ?? '',\n    modificadoEm: f.lastModifiedDateTime,\n  }));\nreturn [{ json: { resposta: { arquivos } } }];\n"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000006",
+      "name": "Formatar lista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000007",
+      "name": "Responder lista",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.urlModelo }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "modelo"
+            }
+          }
+        }
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000008",
+      "name": "Baixar modelo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        400
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// O nó Compression só abre arquivos com extensão .zip, e um .docx é um zip.\nconst item = $input.first();\nitem.binary.modelo.fileName = 'modelo.zip';\nitem.binary.modelo.fileExtension = 'zip';\nitem.binary.modelo.mimeType = 'application/zip';\nreturn [item];\n"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000015",
+      "name": "Preparar modelo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "decompress",
+        "binaryPropertyName": "modelo",
+        "outputPrefix": "parte_"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000016",
+      "name": "Abrir docx",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Preenche campos {{chave}} no XML de um documento do Word (word/document.xml,\n * cabeçalhos e rodapés). O Word costuma quebrar um mesmo campo em vários\n * trechos <w:t> (por correção ortográfica, formatação etc.), então a busca é\n * feita no texto de cada parágrafo inteiro e só o conteúdo dos <w:t> é\n * reescrito: as tags do documento nunca são alteradas, só o texto delas.\n *\n * Este arquivo é embutido no workflow do OneDrive pelo gerar-workflows.mjs e\n * também é testado pelo Jest do app.\n */\n\nconst CAMPO = /\\{\\{\\s*([\\w.]+)\\s*\\}\\}/g;\nconst TRECHO = /<w:t(\\s[^>]*)?>([\\s\\S]*?)<\\/w:t>/g;\nconst PARAGRAFO = /<w:p[\\s>][\\s\\S]*?<\\/w:p>/g;\n\nfunction desescapar(texto) {\n  return texto\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&quot;/g, '\"')\n    .replace(/&apos;/g, \"'\")\n    .replace(/&amp;/g, '&');\n}\n\nfunction escapar(texto) {\n  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\nfunction mesclarParagrafo(paragrafo, campos) {\n  const trechos = [];\n  for (const m of paragrafo.matchAll(TRECHO)) trechos.push(desescapar(m[2]));\n  const completo = trechos.join('');\n  if (!completo.includes('{{')) return paragrafo;\n\n  // Dono de cada caractere do texto completo (índice do trecho <w:t>).\n  const dono = [];\n  trechos.forEach((t, i) => {\n    for (let k = 0; k < t.length; k++) dono.push(i);\n  });\n\n  const substituicoes = new Map();\n  for (const m of completo.matchAll(CAMPO)) {\n    if (Object.prototype.hasOwnProperty.call(campos, m[1])) {\n      substituicoes.set(m.index, { fim: m.index + m[0].length, valor: String(campos[m[1]] ?? '') });\n    }\n  }\n  if (substituicoes.size === 0) return paragrafo;\n\n  // O valor entra no trecho onde o campo começa; o resto do campo some dos outros trechos.\n  const novos = trechos.map(() => '');\n  for (let i = 0; i < completo.length; ) {\n    const s = substituicoes.get(i);\n    if (s) {\n      novos[dono[i]] += s.valor.replace(/\\r?\\n/g, ' ');\n      i = s.fim;\n    } else {\n      novos[dono[i]] += completo[i];\n      i++;\n    }\n  }\n\n  let indice = 0;\n  return paragrafo.replace(TRECHO, (_, atributos = '', original) => {\n    const texto = novos[indice++];\n    if (texto === desescapar(original)) return `<w:t${atributos}>${original}</w:t>`;\n    const preservar = /xml:space=/.test(atributos) ? atributos : `${atributos} xml:space=\"preserve\"`;\n    return `<w:t${preservar}>${escapar(texto)}</w:t>`;\n  });\n}\n\nfunction mesclarXmlWord(xml, campos) {\n  return xml.replace(PARAGRAFO, (p) => mesclarParagrafo(p, campos));\n}\n\n/** Partes do .docx que podem conter campos. */\nfunction ehParteComTexto(caminho) {\n  return /^word\\/(document|header\\d*|footer\\d*|footnotes|endnotes)\\.xml$/.test(caminho);\n}\n\n\n// Preenche os campos nas partes de texto do .docx e devolve o caminho completo\n// de cada parte no nome do arquivo, para o nó Compression remontar o zip.\n// mesclarXmlWord e ehParteComTexto vêm de codigo/mesclarDocx.js.\nconst item = $input.first();\nconst campos = $('Validar pedido').first().json.campos;\nconst partes = [];\nfor (const [chave, binario] of Object.entries(item.binary ?? {})) {\n  const caminho = binario.directory ? `${binario.directory}/${binario.fileName}` : binario.fileName;\n  if (ehParteComTexto(caminho)) {\n    const xml = (await this.helpers.getBinaryDataBuffer(0, chave)).toString('utf8');\n    const mesclado = mesclarXmlWord(xml, campos);\n    item.binary[chave] = await this.helpers.prepareBinaryData(Buffer.from(mesclado, 'utf8'), caminho, 'application/xml');\n  }\n  item.binary[chave].fileName = caminho;\n  delete item.binary[chave].directory;\n  partes.push(chave);\n}\nif (!partes.some((p) => item.binary[p].fileName === 'word/document.xml')) {\n  throw new Error('O arquivo de modelo não parece ser um documento do Word (.docx).');\n}\nitem.json = { partes: partes.join(',') };\nreturn [item];\n"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000009",
+      "name": "Mesclar campos no Word",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "compress",
+        "binaryPropertyName": "={{ $json.partes }}",
+        "outputFormat": "zip",
+        "fileName": "={{ $('Validar pedido').first().json.nome }}",
+        "binaryPropertyOutput": "documento"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000017",
+      "name": "Montar docx",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $('Validar pedido').first().json.urlDestino }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "documento"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000018",
+      "name": "Salvar no OneDrive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        400
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const enviado = $input.first().json;\nreturn [{\n  json: {\n    resposta: {\n      arquivo: {\n        id: enviado.id,\n        nome: enviado.name,\n        url: enviado.webUrl,\n        mimeType: enviado.file?.mimeType ?? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',\n      },\n    },\n  },\n}];\n"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000010",
+      "name": "Formatar documento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000011",
+      "name": "Responder documento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000012",
+      "name": "Responder erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SERVICO = {\"nome\":\"O OneDrive\",\"dica404\":\"Confira o caminho do modelo e da pasta (ex.: /Causa/Modelos/Procuracao.docx) na conta Microsoft conectada ao n8n.\",\"dica403\":\"Verifique a credencial Microsoft Drive no n8n e se ela tem permissão Files.ReadWrite.All.\"};\n// Transforma a falha da API do Google ou da Microsoft em uma mensagem para o app.\n// SERVICO ({ nome, dica404, dica403 }) é definido no topo pelo gerar-workflows.mjs.\nconst item = $input.first().json;\nconst e = item.error ?? item;\nconst codigo = String(e.httpCode ?? e.status ?? '');\n// O corpo de erro ({\"error\":{\"message\":...}}) pode vir embutido e escapado na mensagem.\nconst extrair = (texto) => {\n  if (typeof texto !== 'string') return '';\n  const json = texto.slice(texto.indexOf('{'), texto.lastIndexOf('}') + 1);\n  for (const candidato of [texto, json, json.replace(/\\\\\"/g, '\"')]) {\n    try {\n      const valor = JSON.parse(candidato);\n      if (valor && valor.error && valor.error.message) return valor.error.message;\n    } catch (e) {}\n  }\n  return '';\n};\nconst detalhe = extrair(e.description) || extrair(e.message) || e.message || 'erro desconhecido';\nlet dica = '';\nif (codigo === '404') dica = ` ${SERVICO.dica404}`;\nif (codigo === '401' || codigo === '403') dica = ` ${SERVICO.dica403}`;\nreturn [{ json: { resposta: { erro: `${SERVICO.nome} recusou o pedido (${codigo || 'sem código'}): ${detalhe.replace(/\\.+$/, '')}.${dica}` } } }];\n"
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000013",
+      "name": "Explicar erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "7a2d3b20-0002-4d2b-8c20-c0ffee000014",
+      "name": "Responder erro do serviço",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook do Causa": {
+      "main": [
+        [
+          {
+            "node": "Validar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar pedido": {
+      "main": [
+        [
+          {
+            "node": "Rota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rota": {
+      "main": [
+        [
+          {
+            "node": "Responder ping",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Listar arquivos do OneDrive",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Baixar modelo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar arquivos do OneDrive": {
+      "main": [
+        [
+          {
+            "node": "Formatar lista",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Explicar erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar lista": {
+      "main": [
+        [
+          {
+            "node": "Responder lista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar modelo": {
+      "main": [
+        [
+          {
+            "node": "Preparar modelo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Explicar erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar modelo": {
+      "main": [
+        [
+          {
+            "node": "Abrir docx",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Abrir docx": {
+      "main": [
+        [
+          {
+            "node": "Mesclar campos no Word",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mesclar campos no Word": {
+      "main": [
+        [
+          {
+            "node": "Montar docx",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar docx": {
+      "main": [
+        [
+          {
+            "node": "Salvar no OneDrive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar no OneDrive": {
+      "main": [
+        [
+          {
+            "node": "Formatar documento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Explicar erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar documento": {
+      "main": [
+        [
+          {
+            "node": "Responder documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explicar erro": {
+      "main": [
+        [
+          {
+            "node": "Responder erro do serviço",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false
+}

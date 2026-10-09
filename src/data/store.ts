@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { andamentoDoMovimento, resumoDoProcesso, type ProcessoDataJud } from '../lib/datajud';
 import { hojeISO } from '../lib/datas';
 import { criarDadosExemplo } from './seed';
 import {
@@ -10,6 +11,7 @@ import {
   type Atendimento,
   type Cliente,
   type Compromisso,
+  type Conexao,
   type Dados,
   type Documento,
   type EtapaId,
@@ -45,6 +47,8 @@ interface Acoes {
   excluirProcesso(id: string): void;
   moverEtapa(processoId: string, etapa: EtapaId): void;
   salvarAndamento(a: Rascunho<Andamento>): string;
+  /** Guarda o resumo do DataJud e importa só os movimentos novos. Retorna quantos entraram. */
+  importarDataJud(processoId: string, dados: ProcessoDataJud): number;
   excluirAndamento(id: string): void;
   salvarCompromisso(c: Rascunho<Compromisso>): string;
   alternarConcluido(id: string): void;
@@ -81,7 +85,8 @@ const vazio: Dados = {
   documentos: [],
 };
 
-export const integracaoVazia: Integracao = { webhookUrl: '', token: '', pastaDestinoId: '', pastaImportacaoId: '' };
+export const conexaoVazia: Conexao = { webhookUrl: '', token: '', pastaDestinoId: '', pastaImportacaoId: '' };
+export const integracaoVazia: Integracao = { google: conexaoVazia, onedrive: conexaoVazia, chaveDataJud: '' };
 export const perfilVazio: Perfil = { nome: '', oab: '', email: '', telefone: '', cidade: '' };
 
 /** Remove o vínculo com um processo ou cliente excluído sem apagar o registro. */
@@ -156,6 +161,19 @@ export const useDados = create<Estado>()(
         set({ andamentos });
         return id;
       },
+      importarDataJud(processoId, dados) {
+        const s = get();
+        const existentes = new Set(s.andamentos.map((a) => a.chaveExterna).filter(Boolean));
+        const novos = dados.movimentos
+          .map(andamentoDoMovimento)
+          .filter((a) => !existentes.has(a.chaveExterna))
+          .map((a) => ({ ...a, id: gerarId(), processoId }));
+        set({
+          andamentos: [...s.andamentos, ...novos],
+          processos: s.processos.map((p) => (p.id === processoId ? { ...p, datajud: resumoDoProcesso(dados) } : p)),
+        });
+        return novos.length;
+      },
       excluirAndamento(id) {
         set({ andamentos: get().andamentos.filter((a) => a.id !== id) });
       },
@@ -229,16 +247,9 @@ export const useDados = create<Estado>()(
     }),
     {
       name: 'causa-dados',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
-      // v1 não tinha documentos, modelos, integração nem perfil.
-      migrate: (salvo) => ({
-        modelos: [],
-        documentos: [],
-        integracao: integracaoVazia,
-        perfil: perfilVazio,
-        ...(salvo as object),
-      }),
+      migrate: (salvo, versao) => migrarDados(salvo as Record<string, unknown>, versao) as unknown as Estado,
       partialize: (s): Dados & Configuracoes => ({
         clientes: s.clientes,
         atendimentos: s.atendimentos,
@@ -259,6 +270,35 @@ export const useDados = create<Estado>()(
     },
   ),
 );
+
+/**
+ * Atualiza dados salvos por versões anteriores do app.
+ * v1 → v2: documentos, modelos, integração e perfil.
+ * v2 → v3: integração separada por provedor (Google e OneDrive) e chave do DataJud.
+ */
+export function migrarDados(salvo: Record<string, unknown>, versao: number): Record<string, unknown> {
+  let dados = { ...salvo };
+  if (versao < 2) {
+    dados = {
+      modelos: [],
+      documentos: [],
+      integracao: { webhookUrl: '', token: '', pastaDestinoId: '', pastaImportacaoId: '' },
+      perfil: perfilVazio,
+      ...dados,
+    };
+  }
+  if (versao < 3) {
+    const google = { ...conexaoVazia, ...(dados.integracao as Partial<Conexao>) };
+    dados.integracao = { google, onedrive: conexaoVazia, chaveDataJud: '' };
+    dados.modelos = ((dados.modelos ?? []) as { googleDocId?: string }[]).map(({ googleDocId, ...m }) => ({
+      ...m,
+      provedor: 'google',
+      arquivoId: googleDocId ?? '',
+    }));
+    dados.documentos = ((dados.documentos ?? []) as object[]).map((d) => ({ provedor: 'google', ...d }));
+  }
+  return dados;
+}
 
 function registrarMudancaDeEtapa(processoId: string, etapa: EtapaId) {
   const nome = ETAPAS.find((e) => e.id === etapa)?.nome ?? etapa;

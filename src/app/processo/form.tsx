@@ -1,18 +1,23 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
+import { ActivityIndicator, Text } from 'react-native';
 
 import { Formulario } from '../../components/Formulario';
-import { Botao, Campo, Seletor, SeletorRegistro } from '../../components/ui';
+import { Botao, Campo, Seletor, SeletorRegistro, estilos } from '../../components/ui';
 import { useDados } from '../../data/store';
 import { AREAS, ETAPAS, type Area, type EtapaId, type StatusProcesso } from '../../data/types';
-import { mascararCnj, segmentoJustica, somenteDigitos, validarCnj } from '../../lib/cnj';
+import { decomporCnj, mascararCnj, segmentoJustica, somenteDigitos, validarCnj } from '../../lib/cnj';
+import { aliasTribunal, consultarDataJud, type ProcessoDataJud } from '../../lib/datajud';
 import { centavosParaTexto, lerMoeda, mascararMoeda } from '../../lib/formatos';
+import { cores } from '../../tema';
 
 export default function FormProcesso() {
   const params = useLocalSearchParams<{ id?: string; clienteId?: string }>();
   const existente = useDados((s) => s.processos.find((p) => p.id === params.id));
   const clientes = useDados((s) => s.clientes);
   const salvarProcesso = useDados((s) => s.salvarProcesso);
+  const importarDataJud = useDados((s) => s.importarDataJud);
+  const chaveDataJud = useDados((s) => s.integracao.chaveDataJud);
   const excluirProcesso = useDados((s) => s.excluirProcesso);
 
   const [titulo, setTitulo] = useState(existente?.titulo ?? '');
@@ -27,9 +32,39 @@ export default function FormProcesso() {
   const [valorCausa, setValorCausa] = useState(centavosParaTexto(existente?.valorCausa ?? 0));
   const [observacoes, setObservacoes] = useState(existente?.observacoes ?? '');
   const [erros, setErros] = useState<Record<string, string>>({});
+  const [datajud, setDatajud] = useState<ProcessoDataJud | null>(null);
+  const [consultando, setConsultando] = useState(false);
+  const [avisoDataJud, setAvisoDataJud] = useState<{ erro: boolean; texto: string } | null>(null);
 
   const digitos = somenteDigitos(numero).length;
   const segmento = segmentoJustica(numero);
+  const podeConsultar = digitos === 20 && validarCnj(numero) && !!aliasTribunal(numero);
+
+  async function preencherPeloDataJud() {
+    setConsultando(true);
+    setAvisoDataJud(null);
+    try {
+      const dados = await consultarDataJud(numero, { chave: chaveDataJud || undefined });
+      if (!dados) {
+        setAvisoDataJud({ erro: true, texto: 'O DataJud não encontrou este processo.' });
+        return;
+      }
+      setDatajud(dados);
+      // Só preenche o que está vazio, para não apagar o que o usuário digitou.
+      if (!titulo.trim()) setTitulo([dados.classe, dados.assuntos[0]].filter(Boolean).join(' - '));
+      if (!tribunal.trim()) setTribunal(dados.tribunal);
+      if (!orgao.trim()) setOrgao(dados.orgaoJulgador);
+      if (decomporCnj(numero)?.segmento === '5') setArea('Trabalhista');
+      setAvisoDataJud({
+        erro: false,
+        texto: `Encontrado: ${dados.classe || 'processo'} · ${dados.movimentos.length} andamentos serão importados ao salvar.`,
+      });
+    } catch (e) {
+      setAvisoDataJud({ erro: true, texto: (e as Error).message });
+    } finally {
+      setConsultando(false);
+    }
+  }
 
   function salvar() {
     const novosErros: Record<string, string> = {};
@@ -55,6 +90,7 @@ export default function FormProcesso() {
       observacoes: observacoes.trim(),
       criadoEm: existente?.criadoEm ?? new Date().toISOString(),
     });
+    if (datajud && somenteDigitos(datajud.numero) === somenteDigitos(numero)) importarDataJud(id, datajud);
     if (existente) router.back();
     else router.replace(`/processo/${id}`);
   }
@@ -91,12 +127,24 @@ export default function FormProcesso() {
         onChangeText={(t) => {
           setNumero(mascararCnj(t));
           setErros(({ numero: _, ...resto }) => resto);
+          setAvisoDataJud(null);
         }}
         placeholder="0000000-00.0000.0.00.0000"
         keyboardType="number-pad"
         erro={erros.numero}
         dica={digitos === 20 && validarCnj(numero) ? `Número válido${segmento ? ` · ${segmento}` : ''}` : 'Deixe em branco se ainda não foi distribuído.'}
       />
+      {podeConsultar &&
+        (consultando ? (
+          <ActivityIndicator color={cores.primaria} />
+        ) : (
+          <Botao titulo="Preencher pelo DataJud (CNJ)" icone="cloud-download-outline" variante="secundario" aoPressionar={preencherPeloDataJud} />
+        ))}
+      {avisoDataJud && (
+        <Text style={[estilos.textoSuave, { color: avisoDataJud.erro ? cores.perigo : cores.sucesso, marginTop: -8 }]}>
+          {avisoDataJud.texto}
+        </Text>
+      )}
       <Campo rotulo="Parte contrária" value={parteContraria} onChangeText={setParteContraria} />
       <Seletor<Area> rotulo="Área" opcoes={AREAS.map((a) => ({ valor: a, rotulo: a }))} valor={area} aoMudar={setArea} />
       <Seletor<EtapaId>

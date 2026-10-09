@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AvisoIntegracao } from '../../components/Documentos';
-import { Botao, Busca, Cartao, Seletor, Tela, Vazio, estilos } from '../../components/ui';
+import { Botao, Busca, Cartao, Segmentado, Seletor, Tela, Vazio, estilos } from '../../components/ui';
 import { useDados } from '../../data/store';
+import { PROVEDORES, type Provedor } from '../../data/types';
 import { formatarData } from '../../lib/datas';
 import { descreverTipoArquivo } from '../../lib/google';
 import { listarArquivos, validarIntegracao, type ArquivoDrive } from '../../lib/n8n';
@@ -13,15 +14,18 @@ import { cores, espaco, raio } from '../../tema';
 
 type Escopo = 'pasta' | 'tudo';
 
-export default function ImportarDoDrive() {
+export default function ImportarArquivos() {
   const params = useLocalSearchParams<{ processoId?: string; clienteId?: string }>();
   const integracao = useDados((s) => s.integracao);
   const processo = useDados((s) => s.processos.find((p) => p.id === params.processoId));
   const jaVinculados = useDados((s) => s.documentos);
   const salvarDocumento = useDados((s) => s.salvarDocumento);
 
+  const configurados = (Object.keys(PROVEDORES) as Provedor[]).filter((p) => !validarIntegracao(integracao[p]));
+  const [provedor, setProvedor] = useState<Provedor>(configurados[0] ?? 'google');
+  const conexao = integracao[provedor];
   const [busca, setBusca] = useState('');
-  const [escopo, setEscopo] = useState<Escopo>(integracao.pastaImportacaoId ? 'pasta' : 'tudo');
+  const [escopo, setEscopo] = useState<Escopo>(conexao.pastaImportacaoId ? 'pasta' : 'tudo');
   const [arquivos, setArquivos] = useState<ArquivoDrive[] | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [carregando, setCarregando] = useState(false);
@@ -39,8 +43,8 @@ export default function ImportarDoDrive() {
     setErro('');
     setCarregando(true);
     try {
-      const pastaId = escopo === 'pasta' ? integracao.pastaImportacaoId : '';
-      setArquivos(await listarArquivos(integracao, { busca, pastaId }));
+      const pastaId = escopo === 'pasta' ? conexao.pastaImportacaoId : '';
+      setArquivos(await listarArquivos(conexao, { busca, pastaId }));
       setSelecionados(new Set());
     } catch (e) {
       setErro((e as Error).message);
@@ -68,6 +72,7 @@ export default function ImportarDoDrive() {
         url: arquivo.url,
         mimeType: arquivo.mimeType,
         origem: 'drive',
+        provedor,
         processoId,
         clienteId,
         criadoEm: agora,
@@ -76,7 +81,8 @@ export default function ImportarDoDrive() {
     router.back();
   }
 
-  const integracaoInvalida = validarIntegracao(integracao);
+  const integracaoInvalida = validarIntegracao(conexao);
+  const nomeProvedor = PROVEDORES[provedor].nome;
 
   return (
     <Tela
@@ -92,22 +98,34 @@ export default function ImportarDoDrive() {
         ) : undefined
       }
     >
-      <Stack.Screen options={{ title: 'Importar do Google Drive' }} />
-      {integracaoInvalida && <AvisoIntegracao />}
+      <Stack.Screen options={{ title: 'Importar arquivos' }} />
+      {configurados.length === 0 && <AvisoIntegracao />}
+      {configurados.length > 1 && (
+        <Segmentado<Provedor>
+          opcoes={configurados.map((p) => ({ valor: p, rotulo: PROVEDORES[p].nome }))}
+          valor={provedor}
+          aoMudar={(p) => {
+            setProvedor(p);
+            setArquivos(null);
+            setSelecionados(new Set());
+            setEscopo(integracao[p].pastaImportacaoId ? 'pasta' : 'tudo');
+          }}
+        />
+      )}
 
       <Busca valor={busca} aoMudar={setBusca} placeholder="Nome do arquivo (opcional)" />
-      {!!integracao.pastaImportacaoId && (
+      {!!conexao.pastaImportacaoId && (
         <Seletor<Escopo>
           opcoes={[
             { valor: 'pasta', rotulo: 'Pasta padrão' },
-            { valor: 'tudo', rotulo: 'Todo o Drive' },
+            { valor: 'tudo', rotulo: `Todo o ${nomeProvedor}` },
           ]}
           valor={escopo}
           aoMudar={setEscopo}
         />
       )}
       <Botao
-        titulo="Buscar no Drive"
+        titulo={`Buscar no ${nomeProvedor}`}
         icone="search"
         variante="secundario"
         desabilitado={carregando || !!integracaoInvalida}
@@ -124,7 +142,7 @@ export default function ImportarDoDrive() {
       {carregando && <ActivityIndicator color={cores.primaria} />}
 
       {arquivos && !carregando && arquivos.length === 0 && (
-        <Vazio icone="cloud-offline-outline" titulo="Nenhum arquivo encontrado" texto="Tente outro nome ou busque em todo o Drive." />
+        <Vazio icone="cloud-offline-outline" titulo="Nenhum arquivo encontrado" texto="Tente outro nome ou busque fora da pasta padrão." />
       )}
 
       {arquivos?.map((arquivo) => {

@@ -1,4 +1,4 @@
-import type { Cliente, Integracao, Processo } from '../../data/types';
+import type { Cliente, Conexao, Processo } from '../../data/types';
 import { extrairIdGoogle } from '../google';
 import { camposDeMesclagem, CAMPOS_DISPONIVEIS, nomeArquivoPadrao } from '../mesclagem';
 import { CABECALHO_TOKEN, ErroIntegracao, gerarDocumento, listarArquivos, testarConexao } from '../n8n';
@@ -74,14 +74,14 @@ describe('campos de mesclagem', () => {
   });
 
   it('sugere o nome do arquivo', () => {
-    const modelo = { id: 'm', nome: 'Procuração', googleDocId: ID, descricao: '' };
+    const modelo = { id: 'm', nome: 'Procuração', provedor: 'google' as const, arquivoId: ID, descricao: '' };
     expect(nomeArquivoPadrao(modelo, cliente, '2026-10-09')).toBe('Procuração - Construtora Horizonte Ltda. - 09-10-2026');
     expect(nomeArquivoPadrao(modelo, undefined, '2026-10-09')).toBe('Procuração - 09-10-2026');
   });
 });
 
 describe('cliente do n8n', () => {
-  const config: Integracao = {
+  const config: Conexao = {
     webhookUrl: 'https://n8n.exemplo.com/webhook/causa',
     token: 'segredo',
     pastaDestinoId: ID,
@@ -143,7 +143,7 @@ describe('cliente do n8n', () => {
     await expect(testarConexao({ ...config, webhookUrl: 'n8n.local' }, { fetch: buscar })).rejects.toThrow('https://');
     await expect(
       gerarDocumento({ ...config, pastaDestinoId: '' }, { modeloId: ID, nomeArquivo: 'x', campos: {} }, { fetch: buscar }),
-    ).rejects.toThrow('pasta do Drive');
+    ).rejects.toThrow('pasta para documentos gerados');
     expect(buscar).not.toHaveBeenCalled();
   });
 

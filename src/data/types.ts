@@ -67,6 +67,17 @@ export interface Processo {
   valorCausa: number;
   observacoes: string;
   criadoEm: string;
+  /** Resumo da última consulta ao DataJud (CNJ). */
+  datajud?: ResumoDataJud;
+}
+
+export interface ResumoDataJud {
+  atualizadoEm: string;
+  classe: string;
+  orgaoJulgador: string;
+  assuntos: string[];
+  graus: string[];
+  sigiloso: boolean;
 }
 
 export const TIPOS_ANDAMENTO = {
@@ -87,6 +98,8 @@ export interface Andamento {
   data: DataISO;
   tipo: TipoAndamento;
   descricao: string;
+  /** Identificador do movimento importado do DataJud, para não duplicá-lo. */
+  chaveExterna?: string;
 }
 
 export const TIPOS_COMPROMISSO = {
@@ -140,20 +153,31 @@ export interface Lancamento {
   clienteId?: string;
 }
 
-/** Documento do Google Docs usado como modelo, com campos {{chave}} a mesclar. */
+export const PROVEDORES = {
+  google: { nome: 'Google Drive', modelo: 'Google Docs' },
+  onedrive: { nome: 'OneDrive', modelo: 'Word no OneDrive' },
+} as const;
+export type Provedor = keyof typeof PROVEDORES;
+
+/**
+ * Documento usado como modelo, com campos {{chave}} a mesclar: no Google, o ID
+ * de um Google Docs; no OneDrive, o caminho de um .docx (ex.: /Causa/Modelos/Procuracao.docx).
+ */
 export interface ModeloDocumento {
   id: string;
   nome: string;
-  googleDocId: string;
+  provedor: Provedor;
+  arquivoId: string;
   descricao: string;
 }
 
 export type OrigemDocumento = 'drive' | 'gerado';
 
-/** Arquivo do Google Drive vinculado a um processo ou cliente. */
+/** Arquivo do Google Drive ou do OneDrive vinculado a um processo ou cliente. */
 export interface Documento {
   id: string;
   nome: string;
+  provedor: Provedor;
   driveId: string;
   url: string;
   mimeType: string;
@@ -164,14 +188,21 @@ export interface Documento {
   criadoEm: string;
 }
 
-/** Conexão com o workflow do n8n que fala com o Google Drive e o Google Docs. */
-export interface Integracao {
+/** Conexão com um workflow do n8n (Google Drive ou OneDrive). */
+export interface Conexao {
   webhookUrl: string;
   token: string;
-  /** Pasta do Drive onde os documentos gerados são salvos. */
+  /** Pasta onde os documentos gerados são salvos (ID no Google, caminho no OneDrive). */
   pastaDestinoId: string;
-  /** Pasta usada por padrão ao importar arquivos (vazio = todo o Drive). */
+  /** Pasta usada por padrão ao importar arquivos (vazio = todo o armazenamento). */
   pastaImportacaoId: string;
+}
+
+export interface Integracao {
+  google: Conexao;
+  onedrive: Conexao;
+  /** Chave da API pública do DataJud; vazio usa a chave pública divulgada pelo CNJ. */
+  chaveDataJud: string;
 }
 
 /** Dados de quem assina os documentos, usados nos campos {{advogado.*}}. */

@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useDados } from '../data/store';
-import type { Documento } from '../data/types';
+import { PROVEDORES, type Documento } from '../data/types';
 import { avisar, confirmar } from '../lib/confirmar';
 import { diaDoInstante, formatarData } from '../lib/datas';
 import { descreverTipoArquivo } from '../lib/google';
@@ -21,13 +21,14 @@ export async function abrirDocumento(documento: Pick<Documento, 'url' | 'nome'>)
 export function ItemDocumento({ documento }: { documento: Documento }) {
   const excluirDocumento = useDados((s) => s.excluirDocumento);
   const gerado = documento.origem === 'gerado';
+  const google = documento.provedor === 'google';
   return (
     <Cartao estilo={s.item} aoPressionar={() => abrirDocumento(documento)}>
-      <View style={[s.icone, { backgroundColor: gerado ? cores.primariaClara : cores.sucessoClaro }]}>
+      <View style={[s.icone, { backgroundColor: google ? cores.sucessoClaro : cores.primariaClara }]}>
         <Ionicons
-          name={gerado ? 'document-text-outline' : 'logo-google'}
+          name={gerado ? 'document-text-outline' : google ? 'logo-google' : 'logo-microsoft'}
           size={18}
-          color={gerado ? cores.primaria : cores.sucesso}
+          color={google ? cores.sucesso : cores.primaria}
         />
       </View>
       <View style={{ flex: 1 }}>
@@ -35,7 +36,7 @@ export function ItemDocumento({ documento }: { documento: Documento }) {
           {documento.nome}
         </Text>
         <Text style={estilos.textoSuave}>
-          {gerado ? 'Gerado de modelo' : descreverTipoArquivo(documento.mimeType)} ·{' '}
+          {gerado ? 'Gerado de modelo' : descreverTipoArquivo(documento.mimeType)} · {PROVEDORES[documento.provedor].nome} ·{' '}
           {formatarData(diaDoInstante(documento.criadoEm))}
         </Text>
       </View>
@@ -46,7 +47,7 @@ export function ItemDocumento({ documento }: { documento: Documento }) {
         aoPressionar={() =>
           confirmar(
             'Remover vínculo?',
-            `"${documento.nome}" deixa de aparecer aqui. O arquivo continua no seu Google Drive.`,
+            `"${documento.nome}" deixa de aparecer aqui. O arquivo continua no seu ${PROVEDORES[documento.provedor].nome}.`,
             () => excluirDocumento(documento.id),
             'Remover',
           )
@@ -56,7 +57,7 @@ export function ItemDocumento({ documento }: { documento: Documento }) {
   );
 }
 
-/** Seção de documentos do Google Drive de um processo ou cliente. */
+/** Seção de documentos (Google Drive e OneDrive) de um processo ou cliente. */
 export function SecaoDocumentos({ processoId, clienteId }: { processoId?: string; clienteId?: string }) {
   const documentos = useDados((s) => s.documentos);
   const doRegistro = documentos
@@ -80,7 +81,7 @@ export function SecaoDocumentos({ processoId, clienteId }: { processoId?: string
         />
         <Botao
           titulo="Importar"
-          icone="logo-google"
+          icone="cloud-download-outline"
           variante="secundario"
           estilo={{ flex: 1 }}
           aoPressionar={() => router.push(`/documento/importar${sufixo}`)}
@@ -102,8 +103,8 @@ export function AvisoIntegracao() {
       <Cartao estilo={s.aviso}>
         <Ionicons name="link-outline" size={20} color={cores.alerta} />
         <Text style={[estilos.texto, { flex: 1 }]}>
-          Conecte o Google Drive pelo n8n em <Text style={{ fontWeight: '700' }}>Ajustes › Integrações</Text> para usar
-          esta função.
+          Conecte o Google Drive ou o OneDrive pelo n8n em{' '}
+          <Text style={{ fontWeight: '700' }}>Ajustes › Integrações</Text> para usar esta função.
         </Text>
       </Cartao>
     </Pressable>

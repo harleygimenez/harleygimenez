@@ -3,6 +3,8 @@
 Causa é um app de gestão jurídica (processos, pipeline de fases, timeline, agenda, prazos, clientes, financeiro). Ao mudar o app, preserve:
 
 - **Integração com Google Drive e Google Docs via n8n (webhook).** Importar arquivos do Drive para processos e clientes, e gerar documentos a partir de modelos do Google Docs com campos `{{chave}}`, salvando o resultado em uma pasta específica do Drive. O app nunca guarda credenciais do Google. Ele chama o webhook do n8n com o cabeçalho `X-Causa-Token`. O contrato do webhook está em `integracoes/n8n/README.md`, o cliente em `src/lib/n8n.ts` e os campos em `src/lib/mesclagem.ts`. Ao mudar o contrato ou os campos, atualize juntos o workflow `integracoes/n8n/causa-google-drive.json`, o guia e os testes.
+- **Integração com OneDrive e Word via n8n (webhook).** É a alternativa ao Google, com o mesmo contrato de webhook: importar arquivos e gerar documentos a partir de modelos `.docx` com campos `{{chave}}`, salvos numa pasta do OneDrive. Fica no workflow `integracoes/n8n/causa-onedrive.json`. O preenchimento do Word está em `integracoes/n8n/codigo/mesclarDocx.js` e tem testes. Os workflows são gerados por `integracoes/n8n/gerar-workflows.mjs`: edite o código em `codigo/`, nunca o JSON.
+- **DataJud (API pública do CNJ).** Consulta pelo número CNJ e importa as movimentações como andamentos sem duplicar (`chaveExterna`). Fica em `src/lib/datajud.ts`. A chave pública pode ser trocada em Ajustes.
 - Textos da interface em português do Brasil.
 
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.

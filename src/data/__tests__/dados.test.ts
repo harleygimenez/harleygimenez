@@ -10,7 +10,8 @@ import {
   linhaDoTempo,
   resumirLancamentos,
 } from '../selectors';
-import { useDados } from '../store';
+import { migrarDados, useDados } from '../store';
+import type { Documento, Integracao, ModeloDocumento } from '../types';
 
 const HOJE = '2026-10-09';
 let contador = 0;
@@ -122,7 +123,7 @@ describe('store', () => {
 
   it('mantém modelos ao apagar dados e desvincula documentos de processos excluídos', () => {
     const s = useDados.getState();
-    s.salvarModelo({ nome: 'Procuração', googleDocId: '1AbCdEfGhIjKlMnOp', descricao: '' });
+    s.salvarModelo({ nome: 'Procuração', provedor: 'google', arquivoId: '1AbCdEfGhIjKlMnOp', descricao: '' });
     s.carregarExemplo();
     const processo = useDados.getState().processos[0];
     useDados.getState().salvarDocumento({
@@ -131,6 +132,7 @@ describe('store', () => {
       url: 'https://drive.google.com/file/d/arquivo1234/view',
       mimeType: 'application/pdf',
       origem: 'drive',
+      provedor: 'google',
       processoId: processo.id,
       clienteId: processo.clienteId,
       criadoEm: new Date().toISOString(),
@@ -154,7 +156,8 @@ describe('store', () => {
     const estado = useDados.getState();
     expect(estado.documentos).toEqual([]);
     expect(estado.modelos).toEqual([]);
-    expect(estado.integracao.webhookUrl).toBe('');
+    expect(estado.integracao.google.webhookUrl).toBe('');
+    expect(estado.integracao.onedrive.webhookUrl).toBe('');
     expect(estado.perfil.nome).toBe('');
   });
 
@@ -165,5 +168,21 @@ describe('store', () => {
     const atualizado = useDados.getState().lancamentos.find((l) => l.id === pendente.id)!;
     expect(atualizado.pago).toBe(true);
     expect(atualizado.pagoEm).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe('migração da versão 2', () => {
+  it('separa a integração por provedor e marca modelos e documentos como do Google', () => {
+    const v2 = {
+      integracao: { webhookUrl: 'https://n8n/webhook/causa', token: 't', pastaDestinoId: 'pasta123456', pastaImportacaoId: '' },
+      modelos: [{ id: 'm1', nome: 'Procuração', googleDocId: 'doc1234567890', descricao: '' }],
+      documentos: [{ id: 'd1', nome: 'Contrato', driveId: 'x', url: 'u', mimeType: 'm', origem: 'drive', criadoEm: '' }],
+    };
+    const v3 = migrarDados(v2, 2) as { integracao: Integracao; modelos: ModeloDocumento[]; documentos: Documento[] };
+    expect(v3.integracao.google).toEqual(v2.integracao);
+    expect(v3.integracao.onedrive.webhookUrl).toBe('');
+    expect(v3.integracao.chaveDataJud).toBe('');
+    expect(v3.modelos[0]).toEqual({ id: 'm1', nome: 'Procuração', provedor: 'google', arquivoId: 'doc1234567890', descricao: '' });
+    expect(v3.documentos[0].provedor).toBe('google');
   });
 });

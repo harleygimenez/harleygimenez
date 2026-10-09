@@ -5,6 +5,7 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*"],
+    // Código dos nós Code do n8n: o n8n o executa como corpo de função (com "return" no topo).
+    ignores: ["dist/*", "integracoes/n8n/codigo/nos/**"],
   }
 ]);

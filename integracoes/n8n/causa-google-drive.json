@@ -23,7 +23,7 @@
       "parameters": {
         "jsCode": "// Valida o pedido do app Causa e decide a rota.\nconst corpo = $input.first().json.body ?? {};\nconst acao = String(corpo.acao ?? '');\nconst ehId = (v) => typeof v === 'string' && /^[\\w-]{10,}$/.test(v);\nconst erro = (mensagem) => [{ json: { rota: 'erro', resposta: { erro: mensagem } } }];\n\nif (acao === 'ping') {\n  return [{ json: { rota: 'ping', resposta: { ok: true, versao: 1 } } }];\n}\n\nif (acao === 'listar_arquivos') {\n  const pastaId = corpo.pastaId ? String(corpo.pastaId) : '';\n  if (pastaId && !ehId(pastaId)) return erro('ID de pasta inválido.');\n  // Escapa a busca para a sintaxe de consulta do Drive.\n  const busca = String(corpo.busca ?? '').slice(0, 100).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\");\n  const filtros = ['trashed = false', \"mimeType != 'application/vnd.google-apps.folder'\"];\n  if (pastaId) filtros.push(`'${pastaId}' in parents`);\n  if (busca) filtros.push(`name contains '${busca}'`);\n  return [{ json: { rota: 'listar_arquivos', consulta: filtros.join(' and ') } }];\n}\n\nif (acao === 'gerar_documento') {\n  const { modeloId, pastaId, nomeArquivo, campos } = corpo;\n  if (!ehId(modeloId)) return erro('ID do modelo inválido.');\n  if (!ehId(pastaId)) return erro('ID da pasta de destino inválido.');\n  if (typeof nomeArquivo !== 'string' || !nomeArquivo.trim()) return erro('Informe o nome do arquivo.');\n  if (!campos || typeof campos !== 'object' || Array.isArray(campos)) return erro('Campos de mesclagem inválidos.');\n\n  // Cada campo vira um replaceAllText de {{chave}} no documento copiado.\n  const requisicoes = Object.entries(campos)\n    .filter(([chave]) => /^[\\w.]+$/.test(chave))\n    .map(([chave, valor]) => ({\n      replaceAllText: {\n        containsText: { text: '{{' + chave + '}}', matchCase: true },\n        replaceText: String(valor ?? ''),\n      },\n    }));\n  if (requisicoes.length === 0) return erro('Nenhum campo para mesclar.');\n\n  return [{\n    json: {\n      rota: 'gerar_documento',\n      modeloId,\n      pastaId,\n      nomeArquivo: nomeArquivo.trim().slice(0, 200),\n      requisicoes,\n    },\n  }];\n}\n\nreturn erro(`Ação desconhecida: ${acao || '(vazia)'}`);\n"
       },
-      "id": "6f1c2a10-0002-4c1a-9b10-c0ffee000002",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000002",
       "name": "Validar pedido",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -38,7 +38,7 @@
         "numberOutputs": 4,
         "output": "={{ ['ping', 'listar_arquivos', 'gerar_documento', 'erro'].indexOf($json.rota) }}"
       },
-      "id": "6f1c2a10-0003-4c1a-9b10-c0ffee000003",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000003",
       "name": "Rota",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
@@ -55,7 +55,7 @@
           "responseCode": 200
         }
       },
-      "id": "6f1c2a10-0004-4c1a-9b10-c0ffee000004",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000004",
       "name": "Responder ping",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -101,7 +101,7 @@
           ]
         }
       },
-      "id": "6f1c2a10-0005-4c1a-9b10-c0ffee000005",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000005",
       "name": "Listar arquivos do Drive",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -115,7 +115,7 @@
       "parameters": {
         "jsCode": "const arquivos = ($input.first().json.files ?? []).map((f) => ({\n  id: f.id,\n  nome: f.name,\n  url: f.webViewLink,\n  mimeType: f.mimeType,\n  modificadoEm: f.modifiedTime,\n}));\nreturn [{ json: { resposta: { arquivos } } }];\n"
       },
-      "id": "6f1c2a10-0006-4c1a-9b10-c0ffee000006",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000006",
       "name": "Formatar lista",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -132,7 +132,7 @@
           "responseCode": 200
         }
       },
-      "id": "6f1c2a10-0007-4c1a-9b10-c0ffee000007",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000007",
       "name": "Responder lista",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -165,7 +165,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ name: $json.nomeArquivo, parents: [$json.pastaId] }) }}"
       },
-      "id": "6f1c2a10-0008-4c1a-9b10-c0ffee000008",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000008",
       "name": "Copiar modelo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -186,7 +186,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ requests: $('Validar pedido').first().json.requisicoes }) }}"
       },
-      "id": "6f1c2a10-0009-4c1a-9b10-c0ffee000009",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000009",
       "name": "Mesclar campos no Docs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -200,7 +200,7 @@
       "parameters": {
         "jsCode": "const copia = $('Copiar modelo').first().json;\nreturn [{\n  json: {\n    resposta: {\n      arquivo: {\n        id: copia.id,\n        nome: copia.name,\n        url: copia.webViewLink || `https://docs.google.com/document/d/${copia.id}/edit`,\n        mimeType: copia.mimeType || 'application/vnd.google-apps.document',\n      },\n    },\n  },\n}];\n"
       },
-      "id": "6f1c2a10-0010-4c1a-9b10-c0ffee000010",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000010",
       "name": "Formatar documento",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -217,7 +217,7 @@
           "responseCode": 200
         }
       },
-      "id": "6f1c2a10-0011-4c1a-9b10-c0ffee000011",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000011",
       "name": "Responder documento",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -234,7 +234,7 @@
           "responseCode": 400
         }
       },
-      "id": "6f1c2a10-0012-4c1a-9b10-c0ffee000012",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000012",
       "name": "Responder erro",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -245,15 +245,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Transforma a falha da API do Google em uma mensagem para o app.\nconst item = $input.first().json;\nconst e = item.error ?? item;\nconst codigo = String(e.httpCode ?? e.status ?? '');\n// O corpo de erro do Google ({\"error\":{\"message\":...}}) pode vir embutido e escapado na mensagem.\nconst extrair = (texto) => {\n  if (typeof texto !== 'string') return '';\n  const json = texto.slice(texto.indexOf('{'), texto.lastIndexOf('}') + 1);\n  for (const candidato of [texto, json, json.replace(/\\\\\"/g, '\"')]) {\n    try {\n      const valor = JSON.parse(candidato);\n      if (valor && valor.error && valor.error.message) return valor.error.message;\n    } catch (e) {}\n  }\n  return '';\n};\nconst detalhe = extrair(e.description) || extrair(e.message) || e.message || 'erro desconhecido';\nlet dica = '';\nif (codigo === '404') dica = ' Confira se o modelo ou a pasta existe e se a conta Google conectada ao n8n tem acesso a ele.';\nif (codigo === '401' || codigo === '403') dica = ' Verifique a credencial Google no n8n e se as APIs Google Drive e Google Docs estão ativadas.';\nreturn [{ json: { resposta: { erro: `O Google recusou o pedido (${codigo || 'sem código'}): ${detalhe.replace(/\\.+$/, '')}.${dica}` } } }];\n"
+        "jsCode": "const SERVICO = {\"nome\":\"O Google\",\"dica404\":\"Confira se o modelo ou a pasta existe e se a conta Google conectada ao n8n tem acesso a ele.\",\"dica403\":\"Verifique a credencial Google no n8n e se as APIs Google Drive e Google Docs estão ativadas.\"};\n// Transforma a falha da API do Google ou da Microsoft em uma mensagem para o app.\n// SERVICO ({ nome, dica404, dica403 }) é definido no topo pelo gerar-workflows.mjs.\nconst item = $input.first().json;\nconst e = item.error ?? item;\nconst codigo = String(e.httpCode ?? e.status ?? '');\n// O corpo de erro ({\"error\":{\"message\":...}}) pode vir embutido e escapado na mensagem.\nconst extrair = (texto) => {\n  if (typeof texto !== 'string') return '';\n  const json = texto.slice(texto.indexOf('{'), texto.lastIndexOf('}') + 1);\n  for (const candidato of [texto, json, json.replace(/\\\\\"/g, '\"')]) {\n    try {\n      const valor = JSON.parse(candidato);\n      if (valor && valor.error && valor.error.message) return valor.error.message;\n    } catch (e) {}\n  }\n  return '';\n};\nconst detalhe = extrair(e.description) || extrair(e.message) || e.message || 'erro desconhecido';\nlet dica = '';\nif (codigo === '404') dica = ` ${SERVICO.dica404}`;\nif (codigo === '401' || codigo === '403') dica = ` ${SERVICO.dica403}`;\nreturn [{ json: { resposta: { erro: `${SERVICO.nome} recusou o pedido (${codigo || 'sem código'}): ${detalhe.replace(/\\.+$/, '')}.${dica}` } } }];\n"
       },
-      "id": "6f1c2a10-0013-4c1a-9b10-c0ffee000013",
-      "name": "Explicar erro do Google",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000013",
+      "name": "Explicar erro",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
-        640
+        1340,
+        700
       ]
     },
     {
@@ -264,13 +264,13 @@
           "responseCode": 502
         }
       },
-      "id": "6f1c2a10-0014-4c1a-9b10-c0ffee000014",
-      "name": "Responder erro do Google",
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000014",
+      "name": "Responder erro do serviço",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1340,
-        640
+        1560,
+        700
       ]
     }
   ],
@@ -340,7 +340,7 @@
         ],
         [
           {
-            "node": "Explicar erro do Google",
+            "node": "Explicar erro",
             "type": "main",
             "index": 0
           }
@@ -369,7 +369,7 @@
         ],
         [
           {
-            "node": "Explicar erro do Google",
+            "node": "Explicar erro",
             "type": "main",
             "index": 0
           }
@@ -387,18 +387,7 @@
         ],
         [
           {
-            "node": "Explicar erro do Google",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Explicar erro do Google": {
-      "main": [
-        [
-          {
-            "node": "Responder erro do Google",
+            "node": "Explicar erro",
             "type": "main",
             "index": 0
           }
@@ -410,6 +399,17 @@
         [
           {
             "node": "Responder documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explicar erro": {
+      "main": [
+        [
+          {
+            "node": "Responder erro do serviço",
             "type": "main",
             "index": 0
           }

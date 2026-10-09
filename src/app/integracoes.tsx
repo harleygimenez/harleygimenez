@@ -5,45 +5,65 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { Botao, Campo, Cartao, Secao, Tela, estilos } from '../components/ui';
 import { useDados } from '../data/store';
-import { extrairIdGoogle } from '../lib/google';
+import { PROVEDORES, type Conexao, type Provedor } from '../data/types';
+import { identificarArquivo } from '../lib/armazenamento';
+import { CHAVE_PUBLICA_DATAJUD } from '../lib/datajud';
 import { mascararTelefone } from '../lib/formatos';
 import { CABECALHO_TOKEN, testarConexao } from '../lib/n8n';
 import { cores, espaco, raio } from '../tema';
 
 type Teste = { estado: 'ok' | 'erro'; mensagem: string } | null;
 
-export default function Integracoes() {
-  const integracao = useDados((s) => s.integracao);
-  const perfil = useDados((s) => s.perfil);
-  const salvarIntegracao = useDados((s) => s.salvarIntegracao);
-  const salvarPerfil = useDados((s) => s.salvarPerfil);
+/** Campos digitados; as pastas viram ID (Google) ou caminho (OneDrive) ao salvar. */
+type Rascunho = Conexao;
 
-  const [webhookUrl, setWebhookUrl] = useState(integracao.webhookUrl);
-  const [token, setToken] = useState(integracao.token);
-  const [pastaDestino, setPastaDestino] = useState(integracao.pastaDestinoId);
-  const [pastaImportacao, setPastaImportacao] = useState(integracao.pastaImportacaoId);
-  const [nome, setNome] = useState(perfil.nome);
-  const [oab, setOab] = useState(perfil.oab);
-  const [email, setEmail] = useState(perfil.email);
-  const [telefone, setTelefone] = useState(perfil.telefone);
-  const [cidade, setCidade] = useState(perfil.cidade);
+const TEXTOS: Record<Provedor, { arquivo: string; pastaDestino: string; pastaImportacao: string; dicaPasta: string }> = {
+  google: {
+    arquivo: 'causa-google-drive.json',
+    pastaDestino: 'Link da pasta no Google Drive',
+    pastaImportacao: 'Vazio = buscar em todo o Drive',
+    dicaPasta: 'Abra a pasta no Drive e copie o link do navegador.',
+  },
+  onedrive: {
+    arquivo: 'causa-onedrive.json',
+    pastaDestino: '/Causa/Documentos',
+    pastaImportacao: 'Vazio = raiz do OneDrive',
+    dicaPasta: 'Caminho a partir da raiz do seu OneDrive.',
+  },
+};
+
+function resolver(provedor: Provedor, r: Rascunho): Conexao {
+  return {
+    webhookUrl: r.webhookUrl.trim(),
+    token: r.token.trim(),
+    pastaDestinoId: identificarArquivo(provedor, r.pastaDestinoId),
+    pastaImportacaoId: identificarArquivo(provedor, r.pastaImportacaoId),
+  };
+}
+
+function SecaoConexao({
+  provedor,
+  valor,
+  aoMudar,
+}: {
+  provedor: Provedor;
+  valor: Rascunho;
+  aoMudar: (r: Rascunho) => void;
+}) {
   const [testando, setTestando] = useState(false);
   const [teste, setTeste] = useState<Teste>(null);
-
-  const pastaDestinoId = extrairIdGoogle(pastaDestino);
-  const pastaImportacaoId = extrairIdGoogle(pastaImportacao);
-  const atual = {
-    webhookUrl: webhookUrl.trim(),
-    token: token.trim(),
-    pastaDestinoId,
-    pastaImportacaoId,
+  const textos = TEXTOS[provedor];
+  const conexao = resolver(provedor, valor);
+  const muda = (campo: keyof Rascunho) => (texto: string) => {
+    aoMudar({ ...valor, [campo]: texto });
+    setTeste(null);
   };
 
   async function testar() {
     setTestando(true);
     setTeste(null);
     try {
-      const { versao } = await testarConexao(atual);
+      const { versao } = await testarConexao(conexao);
       setTeste({ estado: 'ok', mensagem: `Conectado ao workflow do n8n (versão ${versao}).` });
     } catch (e) {
       setTeste({ estado: 'erro', mensagem: (e as Error).message });
@@ -52,44 +72,55 @@ export default function Integracoes() {
     }
   }
 
-  function salvar() {
-    salvarIntegracao(atual);
-    salvarPerfil({ nome: nome.trim(), oab: oab.trim(), email: email.trim(), telefone, cidade: cidade.trim() });
-    router.back();
-  }
+  const pastaInvalida = (texto: string, id: string) =>
+    texto.trim() && !id ? (provedor === 'google' ? 'Link de pasta não reconhecido.' : 'Caminho inválido.') : undefined;
 
   return (
-    <Tela
-      rodape={
-        <View style={s.rodape}>
-          <Botao titulo="Salvar" icone="checkmark" aoPressionar={salvar} />
-        </View>
-      }
-    >
-      <Text style={estilos.textoSuave}>
-        O app fala com o Google Drive e o Google Docs por um workflow do n8n. Suas credenciais do Google ficam só no
-        n8n. Importe o arquivo integracoes/n8n/causa-google-drive.json do repositório no seu n8n e siga o guia que
-        está na mesma pasta.
-      </Text>
-
-      <Secao titulo="Webhook do n8n">
+    <Secao titulo={PROVEDORES[provedor].nome}>
+      <Cartao estilo={{ gap: espaco.md }}>
+        <Text style={estilos.textoSuave}>
+          Importe integracoes/n8n/{textos.arquivo} no seu n8n e siga o guia da mesma pasta.
+        </Text>
         <Campo
           rotulo="URL de produção do webhook"
-          value={webhookUrl}
-          onChangeText={setWebhookUrl}
+          value={valor.webhookUrl}
+          onChangeText={muda('webhookUrl')}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
-          placeholder="https://seu-n8n.com/webhook/causa"
+          placeholder={`https://seu-n8n.com/webhook/${provedor === 'google' ? 'causa' : 'causa-onedrive'}`}
         />
         <Campo
           rotulo="Token"
-          value={token}
-          onChangeText={setToken}
+          value={valor.token}
+          onChangeText={muda('token')}
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry
           dica={`Mesmo valor da credencial "Header Auth" do n8n, com o nome ${CABECALHO_TOKEN}.`}
+        />
+        <Campo
+          rotulo="Pasta para documentos gerados"
+          value={valor.pastaDestinoId}
+          onChangeText={muda('pastaDestinoId')}
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder={textos.pastaDestino}
+          dica={
+            conexao.pastaDestinoId && conexao.pastaDestinoId !== valor.pastaDestinoId.trim()
+              ? `${provedor === 'google' ? 'ID' : 'Caminho'}: ${conexao.pastaDestinoId}`
+              : textos.dicaPasta
+          }
+          erro={pastaInvalida(valor.pastaDestinoId, conexao.pastaDestinoId)}
+        />
+        <Campo
+          rotulo="Pasta padrão para importar (opcional)"
+          value={valor.pastaImportacaoId}
+          onChangeText={muda('pastaImportacaoId')}
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder={textos.pastaImportacao}
+          erro={pastaInvalida(valor.pastaImportacaoId, conexao.pastaImportacaoId)}
         />
         <Botao
           titulo="Testar conexão"
@@ -109,29 +140,67 @@ export default function Integracoes() {
             <Text style={{ flex: 1, color: teste.estado === 'ok' ? cores.sucesso : cores.perigo }}>{teste.mensagem}</Text>
           </View>
         )}
-      </Secao>
+      </Cartao>
+    </Secao>
+  );
+}
 
-      <Secao titulo="Pastas do Google Drive">
-        <Campo
-          rotulo="Pasta para documentos gerados"
-          value={pastaDestino}
-          onChangeText={setPastaDestino}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="Link da pasta no Drive"
-          dica={pastaDestinoId ? `ID da pasta: ${pastaDestinoId}` : 'Abra a pasta no Drive e copie o link do navegador.'}
-          erro={pastaDestino && !pastaDestinoId ? 'Link de pasta não reconhecido.' : undefined}
-        />
-        <Campo
-          rotulo="Pasta padrão para importar (opcional)"
-          value={pastaImportacao}
-          onChangeText={setPastaImportacao}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="Vazio = buscar em todo o Drive"
-          dica={pastaImportacaoId ? `ID da pasta: ${pastaImportacaoId}` : undefined}
-          erro={pastaImportacao && !pastaImportacaoId ? 'Link de pasta não reconhecido.' : undefined}
-        />
+export default function Integracoes() {
+  const integracao = useDados((s) => s.integracao);
+  const perfil = useDados((s) => s.perfil);
+  const salvarIntegracao = useDados((s) => s.salvarIntegracao);
+  const salvarPerfil = useDados((s) => s.salvarPerfil);
+
+  const [google, setGoogle] = useState<Rascunho>(integracao.google);
+  const [onedrive, setOnedrive] = useState<Rascunho>(integracao.onedrive);
+  const [chaveDataJud, setChaveDataJud] = useState(integracao.chaveDataJud);
+  const [nome, setNome] = useState(perfil.nome);
+  const [oab, setOab] = useState(perfil.oab);
+  const [email, setEmail] = useState(perfil.email);
+  const [telefone, setTelefone] = useState(perfil.telefone);
+  const [cidade, setCidade] = useState(perfil.cidade);
+
+  function salvar() {
+    salvarIntegracao({
+      google: resolver('google', google),
+      onedrive: resolver('onedrive', onedrive),
+      chaveDataJud: chaveDataJud.trim(),
+    });
+    salvarPerfil({ nome: nome.trim(), oab: oab.trim(), email: email.trim(), telefone, cidade: cidade.trim() });
+    router.back();
+  }
+
+  return (
+    <Tela
+      rodape={
+        <View style={s.rodape}>
+          <Botao titulo="Salvar" icone="checkmark" aoPressionar={salvar} />
+        </View>
+      }
+    >
+      <Text style={estilos.textoSuave}>
+        O app acessa o Google Drive e o OneDrive por workflows do n8n. As credenciais do Google e da Microsoft ficam só
+        no n8n. Configure um ou os dois.
+      </Text>
+
+      <SecaoConexao provedor="google" valor={google} aoMudar={setGoogle} />
+      <SecaoConexao provedor="onedrive" valor={onedrive} aoMudar={setOnedrive} />
+
+      <Secao titulo="DataJud (CNJ)">
+        <Cartao estilo={{ gap: espaco.md }}>
+          <Text style={estilos.textoSuave}>
+            Os andamentos dos processos vêm da API pública do DataJud. Ela usa uma chave pública divulgada pelo CNJ, já
+            configurada. Se o CNJ trocar a chave, cole a nova aqui.
+          </Text>
+          <Campo
+            rotulo="Chave da API pública (opcional)"
+            value={chaveDataJud}
+            onChangeText={setChaveDataJud}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder={`Padrão: ${CHAVE_PUBLICA_DATAJUD.slice(0, 12)}…`}
+          />
+        </Cartao>
       </Secao>
 
       <Secao titulo="Seus dados nos documentos">

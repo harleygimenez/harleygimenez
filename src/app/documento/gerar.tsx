@@ -6,6 +6,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { abrirDocumento, AvisoIntegracao } from '../../components/Documentos';
 import { Botao, Campo, Cartao, Secao, Seletor, SeletorRegistro, Tela, Vazio, estilos } from '../../components/ui';
 import { useDados } from '../../data/store';
+import { PROVEDORES } from '../../data/types';
 import { hojeISO } from '../../lib/datas';
 import { camposDeMesclagem, nomeArquivoPadrao } from '../../lib/mesclagem';
 import { gerarDocumento, validarIntegracao, type ArquivoDrive } from '../../lib/n8n';
@@ -32,6 +33,7 @@ export default function GerarDocumento() {
 
   const hoje = hojeISO();
   const modelo = modelos.find((m) => m.id === modeloId);
+  const conexao = integracao[modelo?.provedor ?? 'google'];
   const processo = processos.find((p) => p.id === processoId);
   const cliente = clientes.find((c) => c.id === clienteId);
   const campos = camposDeMesclagem({ cliente, processo, perfil, hoje });
@@ -49,8 +51,8 @@ export default function GerarDocumento() {
     setErro('');
     setGerando(true);
     try {
-      const arquivo = await gerarDocumento(integracao, {
-        modeloId: modelo.googleDocId,
+      const arquivo = await gerarDocumento(conexao, {
+        modeloId: modelo.arquivoId,
         nomeArquivo: nomeArquivo.trim() || modelo.nome,
         campos,
       });
@@ -60,6 +62,7 @@ export default function GerarDocumento() {
         url: arquivo.url,
         mimeType: arquivo.mimeType,
         origem: 'gerado',
+        provedor: modelo.provedor,
         processoId,
         clienteId,
         modeloId: modelo.id,
@@ -81,10 +84,11 @@ export default function GerarDocumento() {
           <Ionicons name="checkmark-circle" size={56} color={cores.sucesso} />
           <Text style={[estilos.titulo, { textAlign: 'center' }]}>{gerado.nome}</Text>
           <Text style={[estilos.textoSuave, { textAlign: 'center' }]}>
-            Salvo na pasta do Google Drive e vinculado {processo ? 'ao processo' : 'ao cliente'}.
+            Salvo na pasta do {PROVEDORES[modelo?.provedor ?? 'google'].nome} e vinculado{' '}
+            {processo ? 'ao processo' : 'ao cliente'}.
           </Text>
         </View>
-        <Botao titulo="Abrir no Google Docs" icone="open-outline" aoPressionar={() => abrirDocumento(gerado)} />
+        <Botao titulo="Abrir documento" icone="open-outline" aoPressionar={() => abrirDocumento(gerado)} />
         <Botao titulo="Concluir" variante="secundario" aoPressionar={() => router.back()} />
       </Tela>
     );
@@ -93,14 +97,14 @@ export default function GerarDocumento() {
   return (
     <Tela>
       <Stack.Screen options={{ title: 'Gerar documento' }} />
-      {validarIntegracao(integracao) && <AvisoIntegracao />}
+      {modelo && validarIntegracao(conexao) && <AvisoIntegracao />}
 
       {modelos.length === 0 ? (
         <Cartao estilo={{ gap: espaco.md }}>
           <Vazio
             icone="documents-outline"
             titulo="Nenhum modelo cadastrado"
-            texto="Cadastre um documento do Google Docs com campos como {{cliente.nome}} para gerar documentos preenchidos."
+            texto="Cadastre um documento do Google Docs ou do Word (OneDrive) com campos como {{cliente.nome}} para gerar documentos preenchidos."
           />
           <Botao titulo="Cadastrar modelo" icone="add" aoPressionar={() => router.push('/modelo/form')} />
         </Cartao>
@@ -108,7 +112,7 @@ export default function GerarDocumento() {
         <>
           <Seletor
             rotulo="Modelo"
-            opcoes={modelos.map((m) => ({ valor: m.id, rotulo: m.nome }))}
+            opcoes={modelos.map((m) => ({ valor: m.id, rotulo: `${m.nome} · ${PROVEDORES[m.provedor].nome}` }))}
             valor={modeloId}
             aoMudar={(id) => {
               setModeloId(id);
@@ -159,13 +163,13 @@ export default function GerarDocumento() {
           {gerando ? (
             <View style={s.carregando}>
               <ActivityIndicator color={cores.primaria} />
-              <Text style={estilos.textoSuave}>Gerando no Google Docs…</Text>
+              <Text style={estilos.textoSuave}>Gerando no {PROVEDORES[modelo?.provedor ?? 'google'].nome}…</Text>
             </View>
           ) : (
             <Botao
-              titulo="Gerar e salvar no Drive"
+              titulo={`Gerar e salvar no ${PROVEDORES[modelo?.provedor ?? 'google'].nome}`}
               icone="cloud-upload-outline"
-              desabilitado={!modelo || !!validarIntegracao(integracao)}
+              desabilitado={!modelo || !!validarIntegracao(conexao)}
               aoPressionar={gerar}
             />
           )}

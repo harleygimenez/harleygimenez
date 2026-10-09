@@ -101,7 +101,7 @@ export function linhaDoTempo(dados: Dados, processoId: string): ItemLinhaDoTempo
         tipo: 'andamento' as const,
         id: a.id,
         data: a.data,
-        titulo: TIPOS_ANDAMENTO[a.tipo],
+        titulo: a.chaveExterna?.startsWith('datajud:') ? `${TIPOS_ANDAMENTO[a.tipo]} · DataJud` : TIPOS_ANDAMENTO[a.tipo],
         descricao: a.descricao,
         item: a,
       })),
