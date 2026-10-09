@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -18,6 +19,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { hojeISO, formatarData, lerDataBR, mascararData, somarDias } from '../lib/datas';
 import { iniciais, normalizarBusca } from '../lib/formatos';
 import { cores, espaco, raio, sombra } from '../tema';
+
+export const LIMITE_TEXTO = 300;
+export const LIMITE_TEXTO_LONGO = 5000;
 
 export type NomeIcone = ComponentProps<typeof Ionicons>['name'];
 
@@ -138,6 +142,8 @@ export function Campo({
       <TextInput
         placeholderTextColor={cores.textoFraco}
         {...props}
+        // Limite padrão de tamanho para todo campo de texto do app.
+        maxLength={props.maxLength ?? (props.multiline ? LIMITE_TEXTO_LONGO : LIMITE_TEXTO)}
         style={[estilos.entrada, props.multiline && estilos.entradaMultilinha, !!erro && estilos.entradaErro]}
       />
       {erro ? <Text style={estilos.erro}>{erro}</Text> : dica ? <Text style={estilos.dica}>{dica}</Text> : null}
@@ -442,7 +448,48 @@ export function LinhaInfo({ rotulo, valor }: { rotulo: string; valor?: string })
   );
 }
 
+/** Interruptor com rótulo e explicação. */
+export function Alternar({
+  rotulo,
+  dica,
+  valor,
+  aoMudar,
+}: {
+  rotulo: string;
+  dica?: string;
+  valor: boolean;
+  aoMudar: (v: boolean) => void;
+}) {
+  return (
+    <View style={estilos.alternar}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={estilos.texto}>{rotulo}</Text>
+        {!!dica && <Text style={estilos.dica}>{dica}</Text>}
+      </View>
+      <Switch
+        value={valor}
+        onValueChange={aoMudar}
+        accessibilityLabel={rotulo}
+        trackColor={{ true: cores.primaria, false: cores.borda }}
+      />
+    </View>
+  );
+}
+
+/** Mensagem de sucesso ou erro depois de uma ação. */
+export function Aviso({ tipo, mensagem }: { tipo: 'ok' | 'erro'; mensagem: string }) {
+  const cor = tipo === 'ok' ? cores.sucesso : cores.perigo;
+  return (
+    <View style={[estilos.aviso, { backgroundColor: tipo === 'ok' ? cores.sucessoClaro : cores.perigoClaro }]}>
+      <Ionicons name={tipo === 'ok' ? 'checkmark-circle' : 'alert-circle'} size={20} color={cor} />
+      <Text style={{ flex: 1, color: cor }}>{mensagem}</Text>
+    </View>
+  );
+}
+
 export const estilos = StyleSheet.create({
+  alternar: { flexDirection: 'row', alignItems: 'center', gap: espaco.md },
+  aviso: { flexDirection: 'row', gap: espaco.sm, alignItems: 'center', padding: espaco.md, borderRadius: raio.md },
   tela: { flex: 1, backgroundColor: cores.fundo },
   telaConteudo: { padding: espaco.lg, paddingBottom: 96, gap: espaco.lg },
   cartao: {

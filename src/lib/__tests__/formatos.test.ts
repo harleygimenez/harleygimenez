@@ -1,7 +1,7 @@
 import { iniciais, lerMoeda, mascararDocumento, mascararMoeda, mascararTelefone, normalizarBusca } from '../formatos';
 
 // Intl usa espaço não separável entre "R$" e o valor.
-const semNbsp = (t: string) => t.replace(/ /g, ' ');
+const semNbsp = (t: string) => t.replace(/\u00a0/g, ' ');
 
 describe('formatos', () => {
   it('mascara e lê valores em reais como centavos', () => {

@@ -1,0 +1,451 @@
+{
+  "name": "OpenJus - Google Drive e Docs",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "openjus",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "http://localhost:8081"
+        }
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000001",
+      "name": "Webhook do OpenJus",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "6f1c2a10-0001-4c1a-9b10-c0ffee0000ff"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== Configuração de segurança (edite aqui) =====\nconst CONFIG = {\n  // Máximo de chamadas por minuto a este webhook (o excedente recebe HTTP 429).\n  limitePorMinuto: 60,\n  // Se preenchidas, valem no lugar das pastas enviadas pelo app (ID da pasta no Drive).\n  pastaDestinoFixa: '',\n  pastaImportacaoFixa: '',\n};\n// ==================================================\n\n// Proteções comuns aos webhooks do OpenJus (embutidas no início do nó \"Validar pedido\").\n// CONFIG é definido logo abaixo, no próprio nó: ajuste ali os valores do seu escritório.\n\n// Limite de requisições por minuto, contado no n8n (os dados estáticos do workflow\n// só são gravados em execuções de produção, ou seja, com o workflow ativo).\nconst limitarTaxa = () => {\n  const estado = $getWorkflowStaticData('global');\n  const agora = Date.now();\n  estado.chamadas = (Array.isArray(estado.chamadas) ? estado.chamadas : []).filter((t) => agora - t < 60_000);\n  if (estado.chamadas.length >= CONFIG.limitePorMinuto) return false;\n  estado.chamadas.push(agora);\n  return true;\n};\n\n// Campos de mesclagem: objeto simples, chaves curtas, valores de texto com tamanho limitado.\nconst validarCampos = (campos) => {\n  if (!campos || typeof campos !== 'object' || Array.isArray(campos)) return 'Campos de mesclagem inválidos.';\n  const entradas = Object.entries(campos);\n  if (entradas.length === 0) return 'Nenhum campo para mesclar.';\n  if (entradas.length > 100) return 'Campos demais (máximo 100).';\n  for (const [chave, valor] of entradas) {\n    if (!/^[\\w.]{1,60}$/.test(chave)) return `Nome de campo inválido: ${chave.slice(0, 60)}`;\n    if (valor != null && typeof valor !== 'string' && typeof valor !== 'number') return `Valor inválido no campo ${chave}.`;\n    if (String(valor ?? '').length > 10_000) return `Valor grande demais no campo ${chave}.`;\n  }\n  return null;\n};\n\nconst muitasRequisicoes = () => [\n  { json: { rota: 'limite', resposta: { erro: 'Muitas requisições ao n8n. Aguarde um minuto e tente de novo.' } } },\n];\n\n// Valida o pedido do app OpenJus e decide a rota.\nif (!limitarTaxa()) return muitasRequisicoes();\nconst corpo = $input.first().json.body ?? {};\nconst acao = String(corpo.acao ?? '');\nconst ehId = (v) => typeof v === 'string' && /^[\\w-]{10,}$/.test(v);\nconst erro = (mensagem) => [{ json: { rota: 'erro', resposta: { erro: mensagem } } }];\n\nif (acao === 'ping') {\n  return [{ json: { rota: 'ping', resposta: { ok: true, versao: 1 } } }];\n}\n\nif (acao === 'listar_arquivos') {\n  const pastaId = CONFIG.pastaImportacaoFixa || (corpo.pastaId ? String(corpo.pastaId) : '');\n  if (pastaId && !ehId(pastaId)) return erro('ID de pasta inválido.');\n  // Escapa a busca para a sintaxe de consulta do Drive.\n  const busca = String(corpo.busca ?? '').slice(0, 100).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\");\n  const filtros = ['trashed = false', \"mimeType != 'application/vnd.google-apps.folder'\"];\n  if (pastaId) filtros.push(`'${pastaId}' in parents`);\n  if (busca) filtros.push(`name contains '${busca}'`);\n  return [{ json: { rota: 'listar_arquivos', consulta: filtros.join(' and ') } }];\n}\n\nif (acao === 'gerar_documento') {\n  const { modeloId, nomeArquivo, campos } = corpo;\n  const pastaId = CONFIG.pastaDestinoFixa || corpo.pastaId;\n  if (!ehId(modeloId)) return erro('ID do modelo inválido.');\n  if (!ehId(pastaId)) return erro('ID da pasta de destino inválido.');\n  if (typeof nomeArquivo !== 'string' || !nomeArquivo.trim()) return erro('Informe o nome do arquivo.');\n  const camposInvalidos = validarCampos(campos);\n  if (camposInvalidos) return erro(camposInvalidos);\n\n  // Cada campo vira um replaceAllText de {{chave}} no documento copiado.\n  const requisicoes = Object.entries(campos).map(([chave, valor]) => ({\n    replaceAllText: {\n      containsText: { text: '{{' + chave + '}}', matchCase: true },\n      replaceText: String(valor ?? ''),\n    },\n  }));\n\n  return [{\n    json: {\n      rota: 'gerar_documento',\n      modeloId,\n      pastaId,\n      nomeArquivo: nomeArquivo.trim().slice(0, 200),\n      requisicoes,\n    },\n  }];\n}\n\nreturn erro(`Ação desconhecida: ${acao.slice(0, 40) || '(vazia)'}`);\n"
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000002",
+      "name": "Validar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 5,
+        "output": "={{ ['ping', 'listar_arquivos', 'gerar_documento', 'erro', 'limite'].indexOf($json.rota) }}"
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000003",
+      "name": "Rota",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000004",
+      "name": "Responder ping",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDocsOAuth2Api",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.consulta }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType,webViewLink,modifiedTime)"
+            },
+            {
+              "name": "orderBy",
+              "value": "modifiedTime desc"
+            },
+            {
+              "name": "pageSize",
+              "value": "50"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "includeItemsFromAllDrives",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000005",
+      "name": "Listar arquivos do Drive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        200
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const arquivos = ($input.first().json.files ?? []).map((f) => ({\n  id: f.id,\n  nome: f.name,\n  url: f.webViewLink,\n  mimeType: f.mimeType,\n  modificadoEm: f.modifiedTime,\n}));\nreturn [{ json: { resposta: { arquivos } } }];\n"
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000006",
+      "name": "Formatar lista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000007",
+      "name": "Responder lista",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.modeloId }}/copy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDocsOAuth2Api",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "fields",
+              "value": "id,name,mimeType,webViewLink"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.nomeArquivo, parents: [$json.pastaId] }) }}"
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000008",
+      "name": "Copiar modelo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        400
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://docs.googleapis.com/v1/documents/{{ $json.id }}:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDocsOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $('Validar pedido').first().json.requisicoes }) }}"
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000009",
+      "name": "Mesclar campos no Docs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        400
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const copia = $('Copiar modelo').first().json;\nreturn [{\n  json: {\n    resposta: {\n      arquivo: {\n        id: copia.id,\n        nome: copia.name,\n        url: copia.webViewLink || `https://docs.google.com/document/d/${copia.id}/edit`,\n        mimeType: copia.mimeType || 'application/vnd.google-apps.document',\n      },\n    },\n  },\n}];\n"
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000010",
+      "name": "Formatar documento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000011",
+      "name": "Responder documento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000012",
+      "name": "Responder erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 429
+        }
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000019",
+      "name": "Responder limite",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SERVICO = {\"nome\":\"O Google\",\"dica404\":\"Confira se o modelo ou a pasta existe e se a conta Google conectada ao n8n tem acesso a ele.\",\"dica403\":\"Verifique a credencial Google no n8n e se as APIs Google Drive e Google Docs estão ativadas.\"};\n// Transforma a falha da API do Google ou da Microsoft em uma mensagem para o app.\n// SERVICO ({ nome, dica404, dica403 }) é definido no topo pelo gerar-workflows.mjs.\nconst item = $input.first().json;\nconst e = item.error ?? item;\nconst codigo = String(e.httpCode ?? e.status ?? '');\n// O corpo de erro ({\"error\":{\"message\":...}}) pode vir embutido e escapado na mensagem.\nconst extrair = (texto) => {\n  if (typeof texto !== 'string') return '';\n  const json = texto.slice(texto.indexOf('{'), texto.lastIndexOf('}') + 1);\n  for (const candidato of [texto, json, json.replace(/\\\\\"/g, '\"')]) {\n    try {\n      const valor = JSON.parse(candidato);\n      if (valor && valor.error && valor.error.message) return valor.error.message;\n    } catch (e) {}\n  }\n  return '';\n};\nconst detalhe = extrair(e.description) || extrair(e.message) || e.message || 'erro desconhecido';\nlet dica = '';\nif (codigo === '404') dica = ` ${SERVICO.dica404}`;\nif (codigo === '401' || codigo === '403') dica = ` ${SERVICO.dica403}`;\nreturn [{ json: { resposta: { erro: `${SERVICO.nome} recusou o pedido (${codigo || 'sem código'}): ${detalhe.replace(/\\.+$/, '')}.${dica}` } } }];\n"
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000013",
+      "name": "Explicar erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "6f1c2a10-0001-4c1a-9b10-c0ffee000014",
+      "name": "Responder erro do serviço",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook do OpenJus": {
+      "main": [
+        [
+          {
+            "node": "Validar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar pedido": {
+      "main": [
+        [
+          {
+            "node": "Rota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rota": {
+      "main": [
+        [
+          {
+            "node": "Responder ping",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Listar arquivos do Drive",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Copiar modelo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder erro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder limite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar arquivos do Drive": {
+      "main": [
+        [
+          {
+            "node": "Formatar lista",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Explicar erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar lista": {
+      "main": [
+        [
+          {
+            "node": "Responder lista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copiar modelo": {
+      "main": [
+        [
+          {
+            "node": "Mesclar campos no Docs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Explicar erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mesclar campos no Docs": {
+      "main": [
+        [
+          {
+            "node": "Formatar documento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Explicar erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar documento": {
+      "main": [
+        [
+          {
+            "node": "Responder documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explicar erro": {
+      "main": [
+        [
+          {
+            "node": "Responder erro do serviço",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false
+}

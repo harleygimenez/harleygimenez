@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CartaoCompromisso, CartaoLancamento, etapaDe } from '../../components/cartoes';
+import { CartaoDataJud } from '../../components/CartaoDataJud';
+import { SecaoDocumentos } from '../../components/Documentos';
 import { LinhaDoTempo } from '../../components/LinhaDoTempo';
 import { Botao, BotaoIcone, Cartao, LinhaInfo, Secao, Segmentado, Selo, Tela, Vazio, estilos } from '../../components/ui';
 import { linhaDoTempo, ordenarCompromissos, resumirLancamentos } from '../../data/selectors';
@@ -151,6 +153,8 @@ export default function DetalheProcesso() {
             <LinhaInfo rotulo="Valor da causa" valor={centavosParaTexto(processo.valorCausa)} />
             <LinhaInfo rotulo="Observações" valor={processo.observacoes} />
           </Cartao>
+          <CartaoDataJud processo={processo} />
+          <SecaoDocumentos processoId={processo.id} />
           <Secao
             titulo="Atendimentos"
             acao={

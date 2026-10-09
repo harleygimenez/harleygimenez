@@ -2,6 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Text, View } from 'react-native';
 
 import { CartaoCompromisso, CartaoProcesso } from '../../components/cartoes';
+import { SecaoDocumentos } from '../../components/Documentos';
 import { Avatar, BotaoIcone, Cartao, LinhaInfo, Secao, Tela, Vazio, estilos } from '../../components/ui';
 import { compromissosPendentes, resumirLancamentos } from '../../data/selectors';
 import { useDados } from '../../data/store';
@@ -84,6 +85,8 @@ export default function DetalheCliente() {
           processos.map((p) => <CartaoProcesso key={p.id} processo={p} />)
         )}
       </Secao>
+
+      <SecaoDocumentos clienteId={cliente.id} />
 
       {agenda.length > 0 && (
         <Secao titulo="Próximos compromissos">

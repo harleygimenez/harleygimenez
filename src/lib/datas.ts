@@ -11,6 +11,11 @@ export function hojeISO(): DataISO {
   return paraISO(new Date());
 }
 
+/** Dia local de um instante ISO completo (ex.: criadoEm). */
+export function diaDoInstante(instante: string): DataISO {
+  return paraISO(new Date(instante));
+}
+
 export function deISO(data: DataISO): Date {
   return parseISO(data);
 }

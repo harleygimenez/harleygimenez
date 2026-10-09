@@ -1,6 +1,6 @@
 {
-  "name": "causa",
-  "version": "1.0.0",
+  "name": "openjus",
+  "version": "1.1.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -8,9 +8,13 @@
     "date-fns": "^4.4.0",
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
+    "expo-crypto": "~57.0.3",
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.25",
+    "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
+    "expo-web-browser": "~57.0.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -20,6 +24,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
@@ -35,7 +40,9 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "seguranca": "node scripts/verificar-seguranca.mjs",
+    "testar:nuvem": "node nuvem/testar-rls.mjs"
   },
   "private": true,
   "jest": {
@@ -43,5 +50,7 @@
     "setupFiles": [
       "<rootDir>/jest.setup.ts"
     ]
-  }
+  },
+  "license": "MIT",
+  "author": "Harley Gimenez"
 }

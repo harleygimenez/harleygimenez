@@ -52,7 +52,7 @@ export default function Inicio() {
     <Tela>
       <Tabs.Screen
         options={{
-          title: 'Causa',
+          title: 'OpenJus',
           headerRight: () => (
             <View style={{ marginRight: espaco.lg }}>
               <BotaoIcone icone="settings-outline" cor="#fff" rotulo="Ajustes" aoPressionar={() => router.push('/ajustes')} />
@@ -76,6 +76,7 @@ export default function Inicio() {
       <View style={s.atalhos}>
         <Atalho icone="briefcase-outline" rotulo="Processo" rota="/processo/form" />
         <Atalho icone="alarm-outline" rotulo="Prazo" rota="/compromisso/form?tipo=prazo" />
+        <Atalho icone="newspaper-outline" rotulo="Diário" rota="/publicacoes" />
         <Atalho icone="calculator-outline" rotulo="Calcular prazo" rota="/calculadora" />
         <Atalho icone="person-add-outline" rotulo="Cliente" rota="/cliente/form" />
       </View>

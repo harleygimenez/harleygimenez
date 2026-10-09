@@ -67,6 +67,17 @@ export interface Processo {
   valorCausa: number;
   observacoes: string;
   criadoEm: string;
+  /** Resumo da última consulta ao DataJud (CNJ). */
+  datajud?: ResumoDataJud;
+}
+
+export interface ResumoDataJud {
+  atualizadoEm: string;
+  classe: string;
+  orgaoJulgador: string;
+  assuntos: string[];
+  graus: string[];
+  sigiloso: boolean;
 }
 
 export const TIPOS_ANDAMENTO = {
@@ -87,6 +98,12 @@ export interface Andamento {
   data: DataISO;
   tipo: TipoAndamento;
   descricao: string;
+  /** Identificador do movimento importado (DataJud ou DJEN), para não duplicá-lo. */
+  chaveExterna?: string;
+  /** Texto publicado no Diário de Justiça (decisão, despacho, sentença…). */
+  inteiroTeor?: string;
+  /** Certidão ou documento da publicação (só https). */
+  link?: string;
 }
 
 export const TIPOS_COMPROMISSO = {
@@ -112,6 +129,8 @@ export interface Compromisso {
   prioridade: Prioridade;
   concluido: boolean;
   concluidoEm?: string;
+  /** Prazo criado automaticamente a partir de uma publicação (não é recriado se excluído). */
+  chaveExterna?: string;
 }
 
 export type TipoLancamento = 'receita' | 'despesa';
@@ -140,6 +159,79 @@ export interface Lancamento {
   clienteId?: string;
 }
 
+export const PROVEDORES = {
+  google: { nome: 'Google Drive', modelo: 'Google Docs' },
+  onedrive: { nome: 'OneDrive', modelo: 'Word no OneDrive' },
+} as const;
+export type Provedor = keyof typeof PROVEDORES;
+
+/**
+ * Documento usado como modelo, com campos {{chave}} a mesclar: no Google, o ID
+ * de um Google Docs; no OneDrive, o caminho de um .docx (ex.: /OpenJus/Modelos/Procuracao.docx).
+ */
+export interface ModeloDocumento {
+  id: string;
+  nome: string;
+  provedor: Provedor;
+  arquivoId: string;
+  descricao: string;
+}
+
+export type OrigemDocumento = 'drive' | 'gerado';
+
+/** Arquivo do Google Drive ou do OneDrive vinculado a um processo ou cliente. */
+export interface Documento {
+  id: string;
+  nome: string;
+  provedor: Provedor;
+  driveId: string;
+  url: string;
+  mimeType: string;
+  origem: OrigemDocumento;
+  processoId?: string;
+  clienteId?: string;
+  modeloId?: string;
+  criadoEm: string;
+}
+
+/** Conexão com um workflow do n8n (Google Drive ou OneDrive). */
+export interface Conexao {
+  webhookUrl: string;
+  token: string;
+  /** Pasta onde os documentos gerados são salvos (ID no Google, caminho no OneDrive). */
+  pastaDestinoId: string;
+  /** Pasta usada por padrão ao importar arquivos (vazio = todo o armazenamento). */
+  pastaImportacaoId: string;
+}
+
+export interface Integracao {
+  google: Conexao;
+  onedrive: Conexao;
+  /** Chave da API pública do DataJud; vazio usa a chave pública divulgada pelo CNJ. */
+  chaveDataJud: string;
+  /** Cria na agenda os prazos abertos pelas publicações do Diário (DJEN). */
+  prazosAutomaticos: boolean;
+}
+
+/** Dados de quem assina os documentos, usados nos campos {{advogado.*}}. */
+export interface Perfil {
+  nome: string;
+  oab: string;
+  email: string;
+  telefone: string;
+  cidade: string;
+}
+
+/** Advogado do escritório, usado na busca de publicações pela OAB. */
+export interface Advogado {
+  id: string;
+  nome: string;
+  /** Número da OAB, só dígitos. */
+  oab: string;
+  uf: string;
+  email: string;
+}
+
 export interface Dados {
   clientes: Cliente[];
   atendimentos: Atendimento[];
@@ -147,4 +239,6 @@ export interface Dados {
   andamentos: Andamento[];
   compromissos: Compromisso[];
   lancamentos: Lancamento[];
+  modelos: ModeloDocumento[];
+  documentos: Documento[];
 }

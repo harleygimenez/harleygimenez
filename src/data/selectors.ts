@@ -1,4 +1,4 @@
-import { diasAte, hojeISO } from '../lib/datas';
+import { diaDoInstante, diasAte, hojeISO } from '../lib/datas';
 import { normalizarBusca } from '../lib/formatos';
 import {
   TIPOS_ANDAMENTO,
@@ -7,6 +7,7 @@ import {
   type Compromisso,
   type Dados,
   type DataISO,
+  type Documento,
   type Lancamento,
   type Processo,
 } from './types';
@@ -85,10 +86,11 @@ export function buscarProcessos(dados: Pick<Dados, 'processos' | 'clientes'>, te
 export type ItemLinhaDoTempo =
   | { tipo: 'andamento'; id: string; data: DataISO; titulo: string; descricao: string; item: Andamento }
   | { tipo: 'compromisso'; id: string; data: DataISO; titulo: string; descricao: string; item: Compromisso }
-  | { tipo: 'lancamento'; id: string; data: DataISO; titulo: string; descricao: string; item: Lancamento };
+  | { tipo: 'lancamento'; id: string; data: DataISO; titulo: string; descricao: string; item: Lancamento }
+  | { tipo: 'documento'; id: string; data: DataISO; titulo: string; descricao: string; item: Documento };
 
 /**
- * Junta andamentos, compromissos e lançamentos de um processo em uma única
+ * Junta andamentos, compromissos, lançamentos e documentos de um processo em uma única
  * linha do tempo, do mais recente para o mais antigo.
  */
 export function linhaDoTempo(dados: Dados, processoId: string): ItemLinhaDoTempo[] {
@@ -99,7 +101,11 @@ export function linhaDoTempo(dados: Dados, processoId: string): ItemLinhaDoTempo
         tipo: 'andamento' as const,
         id: a.id,
         data: a.data,
-        titulo: TIPOS_ANDAMENTO[a.tipo],
+        titulo: a.chaveExterna?.startsWith('datajud:')
+          ? `${TIPOS_ANDAMENTO[a.tipo]} · DataJud`
+          : a.chaveExterna?.startsWith('djen:')
+            ? `${TIPOS_ANDAMENTO[a.tipo]} · Diário (DJEN)`
+            : TIPOS_ANDAMENTO[a.tipo],
         descricao: a.descricao,
         item: a,
       })),
@@ -122,6 +128,16 @@ export function linhaDoTempo(dados: Dados, processoId: string): ItemLinhaDoTempo
         titulo: l.tipo === 'receita' ? 'Receita' : 'Despesa',
         descricao: l.descricao,
         item: l,
+      })),
+    ...dados.documentos
+      .filter((d) => d.processoId === processoId)
+      .map((d) => ({
+        tipo: 'documento' as const,
+        id: d.id,
+        data: diaDoInstante(d.criadoEm),
+        titulo: d.origem === 'gerado' ? 'Documento gerado' : 'Documento do Drive',
+        descricao: d.nome,
+        item: d,
       })),
   ];
   return itens.sort((a, b) => b.data.localeCompare(a.data));

@@ -1,0 +1,64 @@
+# Consulta REAL às APIs públicas do CNJ (DJEN/Comunica PJe e DataJud) e confere se o app
+# lê as respostas. Só leitura; não altera nada. Rode em Actions › "Consulta real ao CNJ".
+name: Consulta real ao CNJ
+
+on:
+  workflow_dispatch:
+    inputs:
+      oab:
+        description: Número da OAB (só dígitos)
+        default: '28759'
+      uf:
+        description: UF da OAB
+        default: ES
+      processo:
+        description: Número CNJ (20 dígitos)
+        default: '00157865320188080035'
+  push:
+    branches: [ccr-9e2bfeec-nprv6w]
+    paths:
+      - '.github/workflows/consulta-cnj.yml'
+      - 'scripts/cnj-real/**'
+
+permissions:
+  contents: read
+
+jobs:
+  consulta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OAB: ${{ inputs.oab || '28759' }}
+      UF: ${{ inputs.uf || 'ES' }}
+      PROCESSO: ${{ inputs.processo || '00157865320188080035' }}
+      PASTA_CNJ: cnj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Baixar respostas reais
+        run: |
+          mkdir -p cnj
+          if ! [[ "$OAB" =~ ^[0-9]{1,7}$ && "$UF" =~ ^[A-Z]{2}$ && "$PROCESSO" =~ ^[0-9]{20}$ ]]; then echo "entrada inválida"; exit 1; fi
+          inicio=$(date -u -d '-30 days' +%F); fim=$(date -u +%F)
+          baixar() { # $1 arquivo, $2.. curl args
+            arq=$1; shift
+            codigo=$(curl -sS -m 60 -o "cnj/$arq" -w '%{http_code}' "$@" || echo erro)
+            echo "$arq -> HTTP $codigo ($(wc -c < "cnj/$arq" 2>/dev/null || echo 0) bytes)"
+          }
+          baixar djen-oab.json -H 'Accept: application/json' \
+            "https://comunicaapi.pje.jus.br/api/v1/comunicacao?numeroOab=$OAB&ufOab=$UF&dataDisponibilizacaoInicio=$inicio&dataDisponibilizacaoFim=$fim&pagina=1&itensPorPagina=100"
+          sleep 3
+          baixar djen-processo.json -H 'Accept: application/json' \
+            "https://comunicaapi.pje.jus.br/api/v1/comunicacao?numeroProcesso=$PROCESSO&pagina=1&itensPorPagina=100"
+          baixar datajud.json -X POST -H 'Content-Type: application/json' \
+            -H 'Authorization: APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==' \
+            -d "{\"query\":{\"match\":{\"numeroProcesso\":\"$PROCESSO\"}},\"size\":10}" \
+            "https://api-publica.datajud.cnj.jus.br/api_publica_tjes/_search"
+
+      - name: Conferir com o código do app
+        run: npx jest --ci --testMatch '<rootDir>/scripts/cnj-real/*.real.js'
