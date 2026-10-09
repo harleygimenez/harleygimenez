@@ -56,12 +56,15 @@ jobs:
         run: npx expo prebuild --platform android --no-install --clean
         env:
           CI: 1
+          # Cada APK ganha um número de build próprio (aparece em Ajustes e permite atualizar por cima).
+          OPENJUS_BUILD: ${{ github.run_number }}
 
       - name: Compilar APK
         working-directory: android
         # arm64-v8a cobre praticamente todos os celulares atuais; armeabi-v7a, os mais antigos.
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
         env:
+          OPENJUS_BUILD: ${{ github.run_number }}
           # Servidor do escritório embutido no APK (opcional). São valores públicos: configure em
           # Settings › Secrets and variables › Actions › Variables. Sem eles, o usuário informa no app.
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.OPENJUS_SUPABASE_URL }}
@@ -95,4 +98,17 @@ jobs:
             --target "${{ github.sha }}" \
             --prerelease \
             --title "OpenJus – APK de teste ${{ github.run_number }}" \
-            --notes "APK de teste gerado a partir do commit ${{ github.sha }}. Assinado com chave de debug (não é para a Play Store). Para instalar: abra este link no celular Android, baixe o .apk e permita a instalação de fontes desconhecidas."
+            --notes "APK de teste (build ${{ github.run_number }}) gerado a partir do commit ${{ github.sha }}. Em Ajustes, o rodapé mostra a versão e o build instalados. Assinado com chave de debug (não é para a Play Store). Para instalar: abra este link no celular Android, baixe o .apk e permita a instalação de fontes desconhecidas."
+
+      - name: Apagar APKs de teste antigos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Mantém só o APK recém-publicado, para não haver confusão sobre qual instalar.
+        run: |
+          atual="apk-teste-${{ github.run_number }}"
+          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep '^apk-teste-' | while read -r tag; do
+            if [ "$tag" != "$atual" ]; then
+              echo "Apagando $tag"
+              gh release delete "$tag" --cleanup-tag --yes
+            fi
+          done

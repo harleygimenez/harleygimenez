@@ -111,7 +111,7 @@ export default function Ajustes() {
         </Secao>
       )}
 
-      <Text style={[estilos.textoSuave, { textAlign: 'center' }]}>OpenJus · versão {Constants.expoConfig?.version} · software livre (licença MIT)</Text>
+      <Text style={[estilos.textoSuave, { textAlign: 'center' }]}>OpenJus · versão {Constants.expoConfig?.version} (build {String(Constants.expoConfig?.extra?.build ?? 'local')}) · software livre (licença MIT)</Text>
     </Tela>
   );
 }
