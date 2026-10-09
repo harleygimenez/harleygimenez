@@ -9,6 +9,7 @@ on:
     paths:
       - 'src/**'
       - 'nuvem/**'
+      - 'scripts/**'
       - 'assets/**'
       - 'app.json'
       - 'package.json'
