@@ -11,8 +11,12 @@ import {
   type Cliente,
   type Compromisso,
   type Dados,
+  type Documento,
   type EtapaId,
+  type Integracao,
   type Lancamento,
+  type ModeloDocumento,
+  type Perfil,
   type Processo,
 } from './types';
 
@@ -48,11 +52,23 @@ interface Acoes {
   salvarLancamento(l: Rascunho<Lancamento>): string;
   alternarPago(id: string): void;
   excluirLancamento(id: string): void;
+  salvarModelo(m: Rascunho<ModeloDocumento>): string;
+  excluirModelo(id: string): void;
+  salvarDocumento(d: Rascunho<Documento>): string;
+  excluirDocumento(id: string): void;
+  salvarIntegracao(i: Integracao): void;
+  salvarPerfil(p: Perfil): void;
   carregarExemplo(): void;
   apagarTudo(): void;
 }
 
-export type Estado = Dados & { iniciado: boolean } & Acoes;
+interface Configuracoes {
+  iniciado: boolean;
+  integracao: Integracao;
+  perfil: Perfil;
+}
+
+export type Estado = Dados & Configuracoes & Acoes;
 
 const vazio: Dados = {
   clientes: [],
@@ -61,7 +77,12 @@ const vazio: Dados = {
   andamentos: [],
   compromissos: [],
   lancamentos: [],
+  modelos: [],
+  documentos: [],
 };
+
+export const integracaoVazia: Integracao = { webhookUrl: '', token: '', pastaDestinoId: '', pastaImportacaoId: '' };
+export const perfilVazio: Perfil = { nome: '', oab: '', email: '', telefone: '', cidade: '' };
 
 /** Remove o vínculo com um processo ou cliente excluído sem apagar o registro. */
 function desvincular<T extends { processoId?: string; clienteId?: string }>(
@@ -77,6 +98,8 @@ export const useDados = create<Estado>()(
     (set, get) => ({
       ...vazio,
       iniciado: false,
+      integracao: integracaoVazia,
+      perfil: perfilVazio,
 
       salvarCliente(c) {
         const [clientes, id] = salvarEm(get().clientes, c);
@@ -90,6 +113,7 @@ export const useDados = create<Estado>()(
           atendimentos: s.atendimentos.filter((a) => a.clienteId !== id),
           compromissos: desvincular(s.compromissos, 'clienteId', id),
           lancamentos: desvincular(s.lancamentos, 'clienteId', id),
+          documentos: desvincular(s.documentos, 'clienteId', id),
         });
       },
 
@@ -117,6 +141,7 @@ export const useDados = create<Estado>()(
           atendimentos: desvincular(s.atendimentos, 'processoId', id),
           compromissos: desvincular(s.compromissos, 'processoId', id),
           lancamentos: desvincular(s.lancamentos, 'processoId', id),
+          documentos: desvincular(s.documentos, 'processoId', id),
         });
       },
       moverEtapa(processoId, etapa) {
@@ -169,25 +194,63 @@ export const useDados = create<Estado>()(
         set({ lancamentos: get().lancamentos.filter((l) => l.id !== id) });
       },
 
+      salvarModelo(m) {
+        const [modelos, id] = salvarEm(get().modelos, m);
+        set({ modelos });
+        return id;
+      },
+      excluirModelo(id) {
+        set({ modelos: get().modelos.filter((m) => m.id !== id) });
+      },
+
+      salvarDocumento(d) {
+        const [documentos, id] = salvarEm(get().documentos, d);
+        set({ documentos });
+        return id;
+      },
+      excluirDocumento(id) {
+        set({ documentos: get().documentos.filter((d) => d.id !== id) });
+      },
+
+      salvarIntegracao(integracao) {
+        set({ integracao });
+      },
+      salvarPerfil(perfil) {
+        set({ perfil });
+      },
+
+      // Modelos, integração e perfil são configurações e sobrevivem à troca de dados.
       carregarExemplo() {
-        set({ ...criarDadosExemplo(hojeISO(), gerarId), iniciado: true });
+        set({ ...criarDadosExemplo(hojeISO(), gerarId), modelos: get().modelos, iniciado: true });
       },
       apagarTudo() {
-        set({ ...vazio, iniciado: true });
+        set({ ...vazio, modelos: get().modelos, iniciado: true });
       },
     }),
     {
       name: 'causa-dados',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: ({ clientes, atendimentos, processos, andamentos, compromissos, lancamentos, iniciado }) => ({
-        clientes,
-        atendimentos,
-        processos,
-        andamentos,
-        compromissos,
-        lancamentos,
-        iniciado,
+      // v1 não tinha documentos, modelos, integração nem perfil.
+      migrate: (salvo) => ({
+        modelos: [],
+        documentos: [],
+        integracao: integracaoVazia,
+        perfil: perfilVazio,
+        ...(salvo as object),
+      }),
+      partialize: (s): Dados & Configuracoes => ({
+        clientes: s.clientes,
+        atendimentos: s.atendimentos,
+        processos: s.processos,
+        andamentos: s.andamentos,
+        compromissos: s.compromissos,
+        lancamentos: s.lancamentos,
+        modelos: s.modelos,
+        documentos: s.documentos,
+        integracao: s.integracao,
+        perfil: s.perfil,
+        iniciado: s.iniciado,
       }),
       onRehydrateStorage: () => (estado) => {
         // Primeira abertura: mostra dados de exemplo para o app não começar vazio.

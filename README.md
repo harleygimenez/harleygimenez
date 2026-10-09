@@ -16,6 +16,10 @@ Nesta primeira versão os dados ficam **salvos no próprio aparelho** (sem servi
 | **Calculadora de prazos** | Vencimento em dias úteis ou corridos (CPC, arts. 219, 220 e 224), com feriados nacionais, Carnaval, Sexta-feira Santa, Corpus Christi e recesso de 20/12 a 20/01. Pode ser usada dentro do cadastro de prazo. |
 | **Clientes** | Pessoa física ou jurídica (máscaras de CPF/CNPJ e telefone), processos do cliente, próximos compromissos e histórico de atendimentos. |
 | **Financeiro** | Receitas (honorários, êxito, reembolso) e despesas (custas, escritório) por mês, com recebido, a receber, vencidos e saldo realizado/previsto. |
+| **Google Drive** | Busca arquivos na sua conta Google e os vincula a processos e clientes. Os arquivos aparecem na timeline e abrem direto no Drive. |
+| **Modelos no Google Docs** | Documentos com campos como `{{cliente.nome}}`, `{{processo.numero}}` e `{{advogado.oab}}`, preenchidos automaticamente e salvos em uma pasta específica do Drive. |
+
+A integração com o Google passa por um **workflow do n8n chamado via webhook** (as credenciais do Google ficam no n8n, não no celular). O passo a passo está em [`integracoes/n8n/README.md`](integracoes/n8n/README.md).
 
 > A calculadora não conhece feriados estaduais/municipais nem suspensões específicas de cada tribunal. Confira sempre o calendário do tribunal.
 
@@ -46,8 +50,9 @@ src/
   app/            rotas (Expo Router): abas, detalhes e formulários
   components/     componentes de interface (cartões, calendário, pipeline, timeline…)
   data/           tipos, store persistente (zustand + AsyncStorage), seletores e dados de exemplo
-  lib/            regras puras: número CNJ, datas e prazos, formatação
+  lib/            regras puras: número CNJ, datas e prazos, formatação, mesclagem e cliente do n8n
   tema.ts         cores e espaçamentos
+integracoes/n8n/  workflow do n8n (Google Drive e Docs) e guia de configuração
 ```
 
 ## Próximos passos sugeridos
@@ -55,4 +60,4 @@ src/
 - Sincronização na nuvem e login (ex.: Supabase), com vários usuários por escritório.
 - Notificações locais de prazos e audiências (`expo-notifications`).
 - Importação automática de movimentações pela API pública DataJud do CNJ e monitoramento de publicações em diários oficiais.
-- Anexos e documentos por processo, timesheet e relatórios em PDF.
+- Exportar documentos gerados também em PDF, timesheet e relatórios.

@@ -43,6 +43,11 @@ export default function Raiz() {
           <Stack.Screen name="atendimento/form" options={formulario} />
           <Stack.Screen name="calculadora" options={{ title: 'Calculadora de prazos' }} />
           <Stack.Screen name="ajustes" options={{ title: 'Ajustes' }} />
+          <Stack.Screen name="integracoes" options={{ title: 'Integrações' }} />
+          <Stack.Screen name="modelos" options={{ title: 'Modelos de documentos' }} />
+          <Stack.Screen name="modelo/form" options={formulario} />
+          <Stack.Screen name="documento/gerar" options={formulario} />
+          <Stack.Screen name="documento/importar" options={formulario} />
         </Stack>
       ) : (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: cores.fundo }}>

@@ -11,12 +11,14 @@ import { espaco } from '../tema';
 export default function Ajustes() {
   const carregarExemplo = useDados((s) => s.carregarExemplo);
   const apagarTudo = useDados((s) => s.apagarTudo);
+  const integracao = useDados((s) => s.integracao);
   const totais = useDados(
     useShallow((s) => ({
       clientes: s.clientes.length,
       processos: s.processos.length,
       compromissos: s.compromissos.length,
       lancamentos: s.lancamentos.length,
+      modelos: s.modelos.length,
     })),
   );
 
@@ -30,9 +32,24 @@ export default function Ajustes() {
           </Text>
           <Text style={estilos.textoSuave}>
             Os dados ficam salvos apenas neste aparelho. Ao desinstalar o app ou limpar os dados do navegador, eles
-            são perdidos.
+            são perdidos. Restaurar ou apagar mantém seus modelos e a integração.
           </Text>
         </Cartao>
+      </Secao>
+
+      <Secao titulo="Google Drive e Google Docs">
+        <Botao
+          titulo={integracao.webhookUrl ? 'Integrações (n8n conectado)' : 'Conectar pelo n8n'}
+          icone="logo-google"
+          variante="secundario"
+          aoPressionar={() => router.push('/integracoes')}
+        />
+        <Botao
+          titulo={`Modelos de documentos (${totais.modelos})`}
+          icone="documents-outline"
+          variante="secundario"
+          aoPressionar={() => router.push('/modelos')}
+        />
       </Secao>
 
       <Secao titulo="Dados de exemplo">

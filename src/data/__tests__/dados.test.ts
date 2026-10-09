@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { validarCnj } from '../../lib/cnj';
 import { criarDadosExemplo } from '../seed';
 import {
@@ -116,6 +118,44 @@ describe('store', () => {
     expect(depois.andamentos.some((a) => a.processoId === alvo.id)).toBe(false);
     expect(depois.compromissos.some((c) => c.processoId === alvo.id)).toBe(false);
     expect(depois.compromissos).toHaveLength(compromissos.length);
+  });
+
+  it('mantém modelos ao apagar dados e desvincula documentos de processos excluídos', () => {
+    const s = useDados.getState();
+    s.salvarModelo({ nome: 'Procuração', googleDocId: '1AbCdEfGhIjKlMnOp', descricao: '' });
+    s.carregarExemplo();
+    const processo = useDados.getState().processos[0];
+    useDados.getState().salvarDocumento({
+      nome: 'Contrato.pdf',
+      driveId: 'arquivo1234',
+      url: 'https://drive.google.com/file/d/arquivo1234/view',
+      mimeType: 'application/pdf',
+      origem: 'drive',
+      processoId: processo.id,
+      clienteId: processo.clienteId,
+      criadoEm: new Date().toISOString(),
+    });
+    expect(linhaDoTempo(useDados.getState(), processo.id).some((i) => i.tipo === 'documento')).toBe(true);
+
+    useDados.getState().excluirProcesso(processo.id);
+    const documento = useDados.getState().documentos[0];
+    expect(documento.processoId).toBeUndefined();
+    expect(documento.clienteId).toBe(processo.clienteId);
+
+    useDados.getState().apagarTudo();
+    expect(useDados.getState().modelos).toHaveLength(1);
+    expect(useDados.getState().documentos).toHaveLength(0);
+  });
+
+  it('migra dados salvos pela versão anterior, sem documentos nem integração', async () => {
+    const v1 = { clientes: [], atendimentos: [], processos: [], andamentos: [], compromissos: [], lancamentos: [], iniciado: true };
+    await AsyncStorage.setItem('causa-dados', JSON.stringify({ state: v1, version: 1 }));
+    await useDados.persist.rehydrate();
+    const estado = useDados.getState();
+    expect(estado.documentos).toEqual([]);
+    expect(estado.modelos).toEqual([]);
+    expect(estado.integracao.webhookUrl).toBe('');
+    expect(estado.perfil.nome).toBe('');
   });
 
   it('marca lançamentos como pagos com data', () => {

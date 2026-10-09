@@ -7,6 +7,7 @@ import { TIPOS_COMPROMISSO } from '../data/types';
 import { formatarData } from '../lib/datas';
 import { formatarMoeda } from '../lib/formatos';
 import { cores, espaco } from '../tema';
+import { abrirDocumento } from './Documentos';
 import { Vazio, type NomeIcone } from './ui';
 
 const ICONES_ANDAMENTO: Record<string, NomeIcone> = {
@@ -37,17 +38,21 @@ function aparencia(item: ItemLinhaDoTempo): { icone: NomeIcone; cor: string } {
         icone: item.item.tipo === 'receita' ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline',
         cor: item.item.tipo === 'receita' ? cores.sucesso : cores.perigo,
       };
+    case 'documento':
+      return { icone: 'document-attach-outline', cor: cores.primaria };
   }
 }
 
-function rotaDe(item: ItemLinhaDoTempo): string {
+function abrir(item: ItemLinhaDoTempo) {
   switch (item.tipo) {
     case 'andamento':
-      return `/andamento/form?id=${item.id}`;
+      return router.push(`/andamento/form?id=${item.id}`);
     case 'compromisso':
-      return `/compromisso/form?id=${item.id}`;
+      return router.push(`/compromisso/form?id=${item.id}`);
     case 'lancamento':
-      return `/lancamento/form?id=${item.id}`;
+      return router.push(`/lancamento/form?id=${item.id}`);
+    case 'documento':
+      return abrirDocumento(item.item);
   }
 }
 
@@ -61,7 +66,7 @@ export function LinhaDoTempo({ itens }: { itens: ItemLinhaDoTempo[] }) {
         const { icone, cor } = aparencia(item);
         const ultimo = i === itens.length - 1;
         return (
-          <Pressable key={`${item.tipo}-${item.id}`} onPress={() => router.push(rotaDe(item))} style={s.item}>
+          <Pressable key={`${item.tipo}-${item.id}`} onPress={() => abrir(item)} style={s.item}>
             <View style={s.trilho}>
               <View style={[s.icone, { backgroundColor: `${cor}1A` }]}>
                 <Ionicons name={icone} size={16} color={cor} />

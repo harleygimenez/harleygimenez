@@ -140,6 +140,49 @@ export interface Lancamento {
   clienteId?: string;
 }
 
+/** Documento do Google Docs usado como modelo, com campos {{chave}} a mesclar. */
+export interface ModeloDocumento {
+  id: string;
+  nome: string;
+  googleDocId: string;
+  descricao: string;
+}
+
+export type OrigemDocumento = 'drive' | 'gerado';
+
+/** Arquivo do Google Drive vinculado a um processo ou cliente. */
+export interface Documento {
+  id: string;
+  nome: string;
+  driveId: string;
+  url: string;
+  mimeType: string;
+  origem: OrigemDocumento;
+  processoId?: string;
+  clienteId?: string;
+  modeloId?: string;
+  criadoEm: string;
+}
+
+/** Conexão com o workflow do n8n que fala com o Google Drive e o Google Docs. */
+export interface Integracao {
+  webhookUrl: string;
+  token: string;
+  /** Pasta do Drive onde os documentos gerados são salvos. */
+  pastaDestinoId: string;
+  /** Pasta usada por padrão ao importar arquivos (vazio = todo o Drive). */
+  pastaImportacaoId: string;
+}
+
+/** Dados de quem assina os documentos, usados nos campos {{advogado.*}}. */
+export interface Perfil {
+  nome: string;
+  oab: string;
+  email: string;
+  telefone: string;
+  cidade: string;
+}
+
 export interface Dados {
   clientes: Cliente[];
   atendimentos: Atendimento[];
@@ -147,4 +190,6 @@ export interface Dados {
   andamentos: Andamento[];
   compromissos: Compromisso[];
   lancamentos: Lancamento[];
+  modelos: ModeloDocumento[];
+  documentos: Documento[];
 }

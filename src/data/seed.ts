@@ -391,5 +391,9 @@ export function criarDadosExemplo(hoje: DataISO, gerarId: () => string): Dados {
         clienteId: constru,
       },
     ],
+
+    // Modelos e documentos apontam para arquivos reais do Google Drive de cada usuário.
+    modelos: [],
+    documentos: [],
   };
 }

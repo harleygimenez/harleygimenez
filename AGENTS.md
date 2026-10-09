@@ -1,3 +1,10 @@
+## Requisitos do produto que devem ser mantidos
+
+Causa é um app de gestão jurídica (processos, pipeline de fases, timeline, agenda, prazos, clientes, financeiro). Ao mudar o app, preserve:
+
+- **Integração com Google Drive e Google Docs via n8n (webhook).** Importar arquivos do Drive para processos e clientes, e gerar documentos a partir de modelos do Google Docs com campos `{{chave}}`, salvando o resultado em uma pasta específica do Drive. O app nunca guarda credenciais do Google. Ele chama o webhook do n8n com o cabeçalho `X-Causa-Token`. O contrato do webhook está em `integracoes/n8n/README.md`, o cliente em `src/lib/n8n.ts` e os campos em `src/lib/mesclagem.ts`. Ao mudar o contrato ou os campos, atualize juntos o workflow `integracoes/n8n/causa-google-drive.json`, o guia e os testes.
+- Textos da interface em português do Brasil.
+
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
 ## Expo has changed — do not trust your training data
