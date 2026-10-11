@@ -93,8 +93,12 @@ class CartaoSimulado(
     /** ODF: certificados [4] (0xA4) → EF 4404 (CDF). */
     private val ODF = Hex.bytes("A4 06 30 04 04 02 44 04")
 
-    /** CDF: um certificado cujo caminho é o EF 2F01. */
-    private val CDF = Hex.bytes("30 0A 30 08 A1 06 30 04 04 02 2F 01")
+    /**
+     * CDF como no token real: objeto do certificado com certAttributes [1]
+     * (A1) → X509CertificateAttributes (SEQ) → Path (SEQ) → OCTET STRING com o
+     * endereço. Aqui o caminho é 3FFF 2F01 (placeholder + EF 2F01).
+     */
+    private val CDF = Hex.bytes("30 0C A1 0A 30 08 30 06 04 04 3F FF 2F 01")
 
     /** RSA crua: o cartão assina o bloco já com padding PKCS#1 (sem DigestInfo). */
     private fun rsaCru(bloco: ByteArray): ByteArray {

@@ -124,16 +124,20 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
         return null
     }
 
-    /** No CDF, extrai o caminho (OCTET STRING) de cada certificado. */
+    /**
+     * No CDF, extrai o caminho de cada certificado: dentro do `[1]`
+     * certAttributes (0xA1), o endereço é o primeiro OCTET STRING (procurado
+     * de forma recursiva, pois pode estar aninhado em SEQUENCEs: certAttributes
+     * → X509CertificateAttributes → Path → OCTET STRING).
+     */
     private fun caminhosNoCdf(cdf: ByteArray): List<ByteArray> {
         val topo = Der.ler(cdf).firstOrNull { it.construido } ?: return emptyList()
         val objetos = if (topo.filhos().any { it.tag == 0xA1 }) listOf(topo) else topo.filhos()
         val caminhos = mutableListOf<ByteArray>()
         for (obj in objetos) {
             val a1 = obj.filhos().firstOrNull { it.tag == 0xA1 } ?: continue
-            val pathSeq = a1.filhos().firstOrNull { it.tag == 0x30 } ?: continue
-            val oct = pathSeq.filhos().firstOrNull { it.tag == 0x04 } ?: continue
-            if (oct.valor.isNotEmpty()) caminhos += oct.valor
+            val oct = a1.todos().firstOrNull { it.tag == 0x04 && it.valor.size in 2..32 } ?: continue
+            caminhos += oct.valor
         }
         return caminhos
     }
