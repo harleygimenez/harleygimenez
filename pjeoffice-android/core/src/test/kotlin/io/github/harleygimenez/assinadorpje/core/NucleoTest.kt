@@ -366,6 +366,42 @@ class ProcessadorTest {
     }
 }
 
+class ClienteHttpPadraoTest {
+    @Test
+    fun `segue o redirect 302 do login clássico carregando os cookies`() {
+        val servidor = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
+        var cookieNoRedirect: String? = null
+        servidor.createContext("/logar") { ex ->
+            // confere que o cookie da sessão chegou no POST
+            val corpo = ex.requestBody.readBytes()
+            assertTrue(corpo.isNotEmpty(), "o POST do login deve ter corpo")
+            ex.responseHeaders.add("Location", "/home")
+            ex.sendResponseHeaders(302, -1)
+            ex.close()
+        }
+        servidor.createContext("/home") { ex ->
+            cookieNoRedirect = ex.requestHeaders.getFirst("Cookie")
+            val b = "logado".toByteArray()
+            ex.sendResponseHeaders(200, b.size.toLong())
+            ex.responseBody.use { it.write(b) }
+        }
+        servidor.start()
+        try {
+            val base = "http://127.0.0.1:${servidor.address.port}"
+            val r = ClienteHttpPadrao(timeoutMs = 5_000).post(
+                "$base/logar", "application/x-www-form-urlencoded",
+                "assinatura=abc".toByteArray(), mapOf("Cookie" to "JSESSIONID=xyz"),
+            )
+            assertEquals(200, r.status, "deve seguir o 302 e terminar em 200")
+            assertTrue(r.sucesso)
+            assertEquals("logado", r.corpo)
+            assertEquals("JSESSIONID=xyz", cookieNoRedirect, "o cookie deve ser reenviado no redirect")
+        } finally {
+            servidor.stop(0)
+        }
+    }
+}
+
 class ServidorLocalTest {
     private val http = ClienteHttpFalso()
     private val servidor = ServidorLocal(
