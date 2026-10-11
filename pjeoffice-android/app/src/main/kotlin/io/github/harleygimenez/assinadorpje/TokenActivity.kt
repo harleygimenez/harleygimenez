@@ -237,14 +237,15 @@ class TokenActivity : Activity() {
                     try {
                         val token = StarSign(leitor, log)
                         token.abrir()
-                        val cadeia = token.lerCadeia()
-                        if (cadeia.isEmpty()) {
-                            escrever("✖ Não foi possível ler o certificado do token (pode exigir PIN). Tente o diagnóstico.")
-                            return@Thread
-                        }
-                        val desc = "Token StarSign — " + Certificados.descrever(cadeia.first())
+                        val cadeia = runCatching { token.lerCadeia() }.getOrDefault(emptyList())
+                        val desc = if (cadeia.isNotEmpty()) "Token StarSign — " + Certificados.descrever(cadeia.first())
+                        else "Token StarSign CUT S (certificado lido ao assinar)"
                         app.certificados.usarToken(desc)
-                        escrever("✔ Token definido como certificado do PJe.\n$desc\n\nAgora abra o PJe no app e faça o login; o PIN será pedido na hora de assinar.")
+                        if (cadeia.isNotEmpty()) {
+                            escrever("✔ Token definido como certificado do PJe.\n$desc\n\nAgora abra o PJe no app e faça o login; o PIN será pedido na hora de assinar.")
+                        } else {
+                            escrever("✔ Token definido como certificado do PJe.\nO certificado não foi lido sem PIN; será lido na hora de assinar.\n\nAbra o PJe no app e faça o login.")
+                        }
                     } finally {
                         leitor.close()
                     }

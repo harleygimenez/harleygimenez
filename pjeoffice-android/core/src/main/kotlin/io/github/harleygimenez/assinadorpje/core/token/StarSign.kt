@@ -150,8 +150,17 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
         for (i in 0 until comps.size - 1) {
             env(0, 0xA4, 0x00, 0x0C, comps[i]).exigirOk("navegar até o certificado")
         }
-        env(0, 0xA4, 0x02, 0x00, comps.last(), le = 256).exigirOk("selecionar certificado")
-        return lerBinarioAtual(8000)
+        val sel = env(0, 0xA4, 0x02, 0x00, comps.last(), le = 256)
+        if (sel.ok) return lerBinarioAtual(8000)
+        // Caminho curto (só a folha): neste token os certificados ficam no DF 4302.
+        if (comps.size == 1 && sel.sw == 0x6A82) {
+            reselecionarApp()
+            env(0, 0xA4, 0x00, 0x0C, Hex.bytes("4302")).exigirOk("selecionar diretório de certificados")
+            env(0, 0xA4, 0x02, 0x00, comps.last(), le = 256).exigirOk("selecionar certificado")
+            return lerBinarioAtual(8000)
+        }
+        sel.exigirOk("selecionar certificado")
+        return ByteArray(0)
     }
 
     /** Ordena a cadeia com a folha primeiro, subindo pelos emissores. */
