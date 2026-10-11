@@ -220,22 +220,30 @@ class TokenActivity : Activity() {
                 escrever("\n✖ Poucas tentativas de PIN restantes. Teste de assinatura abortado por segurança.")
                 return
             }
+            // Lê todos os certificados ANTES do PIN (não precisam de PIN) para
+            // depois descobrir a qual deles a chave do token corresponde.
+            val todos = runCatching { token.lerTodosCertificados() }.getOrDefault(emptyList())
+            val cadeiaPos = if (cadeia.isNotEmpty()) cadeia else runCatching { token.lerCadeia() }.getOrDefault(emptyList())
             escrever("\nVerificando PIN…")
             token.verificarPin(pin)
             escrever("✔ PIN aceito.")
-            escrever("\nEstrutura PKCS#15 após o PIN:")
-            escrever(runCatching { token.explorarPkcs15() }.getOrElse { "  (falha ao varrer: ${it.message})" })
-            val cadeiaPos = if (cadeia.isNotEmpty()) cadeia else runCatching { token.lerCadeia() }.getOrDefault(emptyList())
             if (cadeiaPos.isEmpty()) { escrever("✖ Não foi possível ler o certificado após o PIN."); return }
             val assinante = AssinanteStarSign(token, cadeiaPos)
             val dados = "teste de assinatura assinador-pje ${System.currentTimeMillis()}".toByteArray()
             val assinatura = assinante.assinar("SHA256withRSA", dados)
             escrever("✔ Assinatura gerada: ${assinatura.size} bytes (chave ref ${token.chaveRefUsadaHex()}).")
-            val ok = Signature.getInstance("SHA256withRSA").run {
-                initVerify(cadeiaPos.first().publicKey); update(dados); verify(assinatura)
+            fun confere(c: java.security.cert.X509Certificate): Boolean = runCatching {
+                Signature.getInstance("SHA256withRSA").run { initVerify(c.publicKey); update(dados); verify(assinatura) }
+            }.getOrDefault(false)
+            val okLeaf = cadeiaPos.firstOrNull()?.let { confere(it) } ?: false
+            if (okLeaf) {
+                escrever("✔ Assinatura CONFERE com o certificado enviado ao PJe. Token funcional!")
+            } else {
+                escrever("✖ A assinatura NÃO confere com o certificado [0] enviado ao PJe.")
+                val match = (todos.ifEmpty { cadeiaPos }).firstOrNull { confere(it) }
+                if (match != null) escrever("➜ A chave do token é, na verdade, do certificado: ${Certificados.descrever(match).replace("\n", " — ")}")
+                else escrever("➜ A assinatura não confere com NENHUM dos ${todos.size} certificados lidos.")
             }
-            escrever(if (ok) "✔ Assinatura CONFERE com a chave pública do certificado. Token funcional!"
-            else "✖ A assinatura NÃO confere — reporte o log técnico.")
         } finally {
             leitor.close()
         }

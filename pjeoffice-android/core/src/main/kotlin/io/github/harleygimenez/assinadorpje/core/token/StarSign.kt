@@ -106,18 +106,20 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
     }
 
     /** Lê a cadeia de certificados (folha primeiro). Ignora slots vazios. */
-    fun lerCadeia(): List<X509Certificate> {
+    fun lerCadeia(): List<X509Certificate> = ordenarCadeia(lerTodosCertificados())
+
+    /** Lê todos os certificados do token, na ordem do CDF (sem ordenar). */
+    fun lerTodosCertificados(): List<X509Certificate> {
         val cf = CertificateFactory.getInstance("X.509")
         // Descoberta PKCS#15: ODF (5031) → CDF (certificados, contexto [4]) →
         // endereços dos certificados → leitura de cada um.
         val odf = runCatching { lerEf("5031") }.getOrNull() ?: return emptyList()
         val cdfFid = fidNoOdf(odf, 0xA4) ?: "4404"
         val cdf = runCatching { lerEf(cdfFid) }.getOrNull() ?: return emptyList()
-        val certs = caminhosNoCdf(cdf).mapNotNull { p ->
+        return caminhosNoCdf(cdf).mapNotNull { p ->
             val der = runCatching { lerCert(p) }.getOrNull() ?: return@mapNotNull null
             runCatching { cf.generateCertificate(der.inputStream()) as X509Certificate }.getOrNull()
         }
-        return ordenarCadeia(certs)
     }
 
     /** Endereços (hex) dos certificados achados no CDF — para diagnóstico. */
