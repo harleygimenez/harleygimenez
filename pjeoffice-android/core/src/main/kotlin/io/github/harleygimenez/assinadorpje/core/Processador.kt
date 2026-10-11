@@ -44,12 +44,17 @@ object Seguranca {
     }
 
     /**
-     * Proteção contra CSRF: a página que chamou o assinador tem de ser do
-     * mesmo servidor indicado na requisição. Sem isso, um site qualquer
-     * poderia mandar o usuário "logar" uma sessão do atacante.
+     * Proteção contra CSRF: quando a página informa um `Origin`, ele tem de
+     * ser do mesmo servidor indicado na requisição — assim um site qualquer
+     * não consegue mandar o usuário "logar" uma sessão do atacante.
+     *
+     * Requisições GET (o PJe carrega o assinador como imagem) não trazem
+     * `Origin`; o PJeOffice aceita esse caso justamente para esse fluxo (login
+     * no SSO, por exemplo). Sem `Origin`, liberamos — a autorização do servidor
+     * (código do CNJ ou domínio `*.jus.br`) já foi conferida antes.
      */
     fun mesmaOrigem(origemChamador: String?, servidor: String): Boolean {
-        val a = origem(origemChamador) ?: return false
+        val a = origem(origemChamador) ?: return true // GET sem Origin (image-ping)
         return a == origem(servidor)
     }
 }

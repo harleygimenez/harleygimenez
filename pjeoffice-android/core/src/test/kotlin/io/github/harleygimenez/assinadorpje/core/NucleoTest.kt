@@ -110,7 +110,8 @@ class SegurancaTest {
         assertTrue(Seguranca.mesmaOrigem("https://pje.trf3.jus.br:443/pje/login.seam", SERVIDOR))
         assertFalse(Seguranca.mesmaOrigem("https://golpe.com", SERVIDOR))
         assertFalse(Seguranca.mesmaOrigem("http://pje.trf3.jus.br", SERVIDOR))
-        assertFalse(Seguranca.mesmaOrigem(null, SERVIDOR))
+        // GET sem Origin (login por image-ping): liberado.
+        assertTrue(Seguranca.mesmaOrigem(null, SERVIDOR))
     }
 }
 
@@ -320,7 +321,14 @@ class ProcessadorTest {
         assertFalse(r.sucesso)
         assertTrue(pedidos.isEmpty())
         assertTrue(http.envios.isEmpty())
-        assertFalse(processador(http).processar(requisicaoSso(), null).sucesso)
+    }
+
+    @Test
+    fun `aceita GET sem Origin (login por image-ping)`() {
+        val http = ClienteHttpFalso()
+        val r = processador(http).processar(requisicaoSso(), null)
+        assertTrue(r.sucesso, r.mensagem)
+        assertEquals(1, http.envios.size)
     }
 
     @Test
