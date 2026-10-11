@@ -64,7 +64,7 @@ class TokenActivity : Activity() {
             getSystemService(android.content.ClipboardManager::class.java)
                 ?.setPrimaryClip(android.content.ClipData.newPlainText("log token", log.texto()))
             android.widget.Toast.makeText(this, "Log copiado", android.widget.Toast.LENGTH_SHORT).show()
-        }.also { raiz.addView(it) })
+        })
 
         saida = TextView(this).apply {
             setPadding(0, Ui.dp(this@TokenActivity, 12), 0, 0)
