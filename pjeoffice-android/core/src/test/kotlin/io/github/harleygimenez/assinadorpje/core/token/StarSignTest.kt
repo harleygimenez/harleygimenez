@@ -47,10 +47,17 @@ class CartaoSimulado(
 
         return when (ins) {
             0xDA -> if (!appletAtivo) sw(0x6D00) else sw(0x9000) // PUT DATA (handshake)
-            0xA4 -> when {
-                p1 == 0x04 -> { appletAtivo = true; resp("desafio".toByteArray(), 0x9000) } // SELECT AID
-                p1 == 0x02 -> { efSelecionado = Hex.de(dados).replace(" ", ""); sw(0x9000) } // EF filho
-                else -> sw(0x9000) // SELECT por FID
+            0xA4 -> when (p1) {
+                0x04 -> { appletAtivo = true; efSelecionado = null; resp("desafio".toByteArray(), 0x9000) } // SELECT AID
+                0x02 -> { // SELECT EF filho (certificado)
+                    val fid = Hex.de(dados).replace(" ", "")
+                    if (fid == "2F01") { efSelecionado = fid; sw(0x9000) } else sw(0x6A82)
+                }
+                else -> { // SELECT por FID (ODF/CDF/DF)
+                    val fid = Hex.de(dados).replace(" ", "")
+                    efSelecionado = if (fid == "5031" || fid == "4404") fid else null
+                    sw(0x9000)
+                }
             }
             0x70 -> { canalAberto = true; resp(byteArrayOf(0x01), 0x9000) } // MANAGE CHANNEL
             0x20 -> when { // VERIFY
@@ -67,17 +74,27 @@ class CartaoSimulado(
                 if (!mseFeito) return sw(0x6985)
                 resp(rsaCru(dados), 0x9000)
             }
-            0xB0 -> { // READ BINARY (só o EF folha tem conteúdo)
-                val leaf = StarSign.CAMINHOS_CERT[0].replace(" ", "").takeLast(4)
-                if (efSelecionado?.endsWith(leaf) != true) return sw(0x6A82)
+            0xB0 -> { // READ BINARY do EF selecionado
+                val conteudo = when (efSelecionado) {
+                    "5031" -> ODF
+                    "4404" -> CDF
+                    "2F01" -> certLeaf
+                    else -> return sw(0x6986)
+                }
                 val off = (p1 shl 8) or p2
-                if (off >= certLeaf.size) return sw(0x6A86)
-                val n = minOf(apdu.last().toInt() and 0xFF, certLeaf.size - off)
-                resp(certLeaf.copyOfRange(off, off + n), 0x9000)
+                if (off >= conteudo.size) return sw(0x9000) // fim: sem dados
+                val n = minOf(apdu.last().toInt() and 0xFF, conteudo.size - off)
+                resp(conteudo.copyOfRange(off, off + n), 0x9000)
             }
             else -> sw(0x6D00)
         }
     }
+
+    /** ODF: certificados [4] (0xA4) → EF 4404 (CDF). */
+    private val ODF = Hex.bytes("A4 06 30 04 04 02 44 04")
+
+    /** CDF: um certificado cujo caminho é o EF 2F01. */
+    private val CDF = Hex.bytes("30 0A 30 08 A1 06 30 04 04 02 2F 01")
 
     /** RSA crua: o cartão assina o bloco já com padding PKCS#1 (sem DigestInfo). */
     private fun rsaCru(bloco: ByteArray): ByteArray {

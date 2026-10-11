@@ -83,10 +83,91 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
     /** Lê a cadeia de certificados (folha primeiro). Ignora slots vazios. */
     fun lerCadeia(): List<X509Certificate> {
         val cf = CertificateFactory.getInstance("X.509")
-        return CAMINHOS_CERT.mapNotNull { caminho ->
-            val der = runCatching { lerArquivo(caminho) }.getOrNull() ?: return@mapNotNull null
+        // Descoberta PKCS#15: ODF (5031) → CDF (certificados, contexto [4]) →
+        // endereços dos certificados → leitura de cada um.
+        val odf = runCatching { lerEf("5031") }.getOrNull() ?: return emptyList()
+        val cdfFid = fidNoOdf(odf, 0xA4) ?: "4404"
+        val cdf = runCatching { lerEf(cdfFid) }.getOrNull() ?: return emptyList()
+        val certs = caminhosNoCdf(cdf).mapNotNull { p ->
+            val der = runCatching { lerCert(p) }.getOrNull() ?: return@mapNotNull null
             runCatching { cf.generateCertificate(der.inputStream()) as X509Certificate }.getOrNull()
         }
+        return ordenarCadeia(certs)
+    }
+
+    /** Endereços (hex) dos certificados achados no CDF — para diagnóstico. */
+    fun caminhosCertHex(): List<String> = runCatching {
+        val odf = lerEf("5031")
+        val cdf = lerEf(fidNoOdf(odf, 0xA4) ?: "4404")
+        caminhosNoCdf(cdf).map { Hex.de(it).replace(" ", "") }
+    }.getOrDefault(emptyList())
+
+    private fun reselecionarApp() {
+        env(0, 0xA4, 0x04, 0x00, AID, le = 256)
+    }
+
+    /** Seleciona um EF filho da aplicação (por FID) e lê todo o conteúdo. */
+    private fun lerEf(fidHex: String): ByteArray {
+        reselecionarApp()
+        env(0, 0xA4, 0x00, 0x0C, Hex.bytes(fidHex)).exigirOk("selecionar $fidHex")
+        return lerBinarioAtual(8000)
+    }
+
+    /** No ODF, encontra o FID apontado por um contexto (ex.: [4] = 0xA4 = certificados). */
+    private fun fidNoOdf(odf: ByteArray, tagCtx: Int): String? {
+        for (t in Der.ler(odf)) {
+            if (t.tag != tagCtx) continue
+            val seq = Der.ler(t.valor).firstOrNull { it.tag == 0x30 } ?: continue
+            val oct = seq.filhos().firstOrNull { it.tag == 0x04 } ?: continue
+            return Hex.de(oct.valor).replace(" ", "")
+        }
+        return null
+    }
+
+    /** No CDF, extrai o caminho (OCTET STRING) de cada certificado. */
+    private fun caminhosNoCdf(cdf: ByteArray): List<ByteArray> {
+        val topo = Der.ler(cdf).firstOrNull { it.construido } ?: return emptyList()
+        val objetos = if (topo.filhos().any { it.tag == 0xA1 }) listOf(topo) else topo.filhos()
+        val caminhos = mutableListOf<ByteArray>()
+        for (obj in objetos) {
+            val a1 = obj.filhos().firstOrNull { it.tag == 0xA1 } ?: continue
+            val pathSeq = a1.filhos().firstOrNull { it.tag == 0x30 } ?: continue
+            val oct = pathSeq.filhos().firstOrNull { it.tag == 0x04 } ?: continue
+            if (oct.valor.isNotEmpty()) caminhos += oct.valor
+        }
+        return caminhos
+    }
+
+    /** Lê um certificado pelo caminho do CDF (ignora MF 3F00 e placeholder 3FFF). */
+    private fun lerCert(path: ByteArray): ByteArray {
+        reselecionarApp()
+        val comps = path.toList().chunked(2) { it.toByteArray() }.filterNot {
+            val hi = it[0].toInt() and 0xFF
+            val lo = it[1].toInt() and 0xFF
+            hi == 0x3F && (lo == 0x00 || lo == 0xFF)
+        }
+        if (comps.isEmpty()) throw ErroToken("Caminho de certificado vazio")
+        for (i in 0 until comps.size - 1) {
+            env(0, 0xA4, 0x00, 0x0C, comps[i]).exigirOk("navegar até o certificado")
+        }
+        env(0, 0xA4, 0x02, 0x00, comps.last(), le = 256).exigirOk("selecionar certificado")
+        return lerBinarioAtual(8000)
+    }
+
+    /** Ordena a cadeia com a folha primeiro, subindo pelos emissores. */
+    private fun ordenarCadeia(certs: List<X509Certificate>): List<X509Certificate> {
+        if (certs.size <= 1) return certs
+        val folha = certs.firstOrNull { c ->
+            certs.none { o -> o !== c && o.issuerX500Principal == c.subjectX500Principal }
+        } ?: certs.first()
+        val ordenada = mutableListOf(folha)
+        var atual = folha
+        while (true) {
+            val emissor = certs.firstOrNull { it !in ordenada && it.subjectX500Principal == atual.issuerX500Principal } ?: break
+            ordenada += emissor
+            atual = emissor
+        }
+        return ordenada
     }
 
     /**
@@ -143,43 +224,6 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
         return out.toByteArray()
     }
 
-    private fun lerArquivo(caminho: String): ByteArray {
-        selecionarCaminho(caminho)
-        val saida = java.io.ByteArrayOutputStream()
-        var offset = 0
-        while (offset < 0x10000) {
-            val n = 0xFE
-            val r = env(0, 0xB0, (offset ushr 8) and 0x7F, offset and 0xFF, le = n)
-            if (!r.ok || r.dados.isEmpty()) break
-            saida.write(r.dados)
-            offset += r.dados.size
-            if (r.dados.size < n) break
-        }
-        return saida.toByteArray()
-    }
-
-    /**
-     * Resolve um caminho do PKCS#15. Caminhos de certificado usam o
-     * placeholder `3FFF`: o componente anterior é um DF real a selecionar uma
-     * vez (`P1=0x00`) e o último é um EF filho (`P1=0x02`).
-     */
-    private fun selecionarCaminho(caminho: String) {
-        val fids = Hex.bytes(caminho).toList().chunked(2) { it.toByteArray() }
-        val ph = fids.indexOfFirst { it[0].toInt() and 0xFF == 0x3F && it[1].toInt() and 0xFF == 0xFF }
-        if (ph >= 0) {
-            val mid = fids[fids.size - 2]
-            val fim = fids[fids.size - 1]
-            env(0, 0xA4, 0x00, 0x0C, mid).exigirOk("selecionar diretório do certificado")
-            env(0, 0xA4, 0x02, 0x00, fim, le = 256).exigirOk("selecionar certificado")
-            return
-        }
-        // Navegação comum a partir do MF; último componente como EF filho.
-        for (i in 0 until fids.size - 1) {
-            env(0, 0xA4, 0x00, 0x0C, fids[i]).exigirOk("navegar no token")
-        }
-        env(0, 0xA4, 0x02, 0x00, fids.last(), le = 256).exigirOk("selecionar arquivo")
-    }
-
     private fun Transporte.transmitirSeForLeitor() {
         if (this is LeitorCcid && atr.isEmpty()) ligar()
     }
@@ -196,14 +240,6 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
 
         const val PIN_REF = 0x02
         const val PIN_MAX = 15
-
-        /** Slots de certificado sob `3F00 3FFF 4302 <ef>` (folha primeiro). */
-        val CAMINHOS_CERT = listOf(
-            "3F00 3FFF 4302 0114", // certificado de assinatura (folha)
-            "3F00 3FFF 4302 05A0", // CA intermediária 1
-            "3F00 3FFF 4302 13AE", // CA intermediária 2
-            "3F00 3FFF 4302 1371", // CA raiz
-        )
 
         const val ATR_CONHECIDO = "3B F9 96 00 00 81 31 FE 45 53 43 45 37 20 0E 00 20 20 28"
     }

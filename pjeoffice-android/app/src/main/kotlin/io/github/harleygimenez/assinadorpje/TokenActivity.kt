@@ -177,6 +177,9 @@ class TokenActivity : Activity() {
             })
 
             escrever("\nLendo certificado(s)…")
+            runCatching { token.caminhosCertHex() }.getOrNull()?.let { caminhos ->
+                if (caminhos.isNotEmpty()) escrever("  Endereços no CDF: ${caminhos.joinToString(", ")}")
+            }
             val cadeia = try {
                 token.lerCadeia()
             } catch (e: ErroToken) {
