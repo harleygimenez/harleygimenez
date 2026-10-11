@@ -85,6 +85,20 @@ class CompletadorCadeiaTest {
     }
 
     @Test
+    fun `completa pelas CAs embutidas sem usar a rede`() {
+        var baixou = false
+        val buscador = CompletadorCadeia.Buscador { baixou = true; null }
+        val completa = CompletadorCadeia.completar(
+            listOf(ParCaFolha.folha),
+            buscador = buscador,
+            locais = listOf(ParCaFolha.ca),
+            aiaDe = { listOf("http://x") },
+        )
+        assertEquals(listOf(ParCaFolha.folha, ParCaFolha.ca), completa)
+        assertFalse(baixou, "com a CA embutida, não deve baixar pela rede")
+    }
+
+    @Test
     fun `sem buscador devolve a cadeia original`() {
         val so = listOf(ParCaFolha.folha)
         assertEquals(so, CompletadorCadeia.completar(so, buscador = null, aiaDe = { listOf("http://x") }))

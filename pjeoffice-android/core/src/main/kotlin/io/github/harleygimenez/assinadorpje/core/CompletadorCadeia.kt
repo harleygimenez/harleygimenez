@@ -23,9 +23,16 @@ object CompletadorCadeia {
         fun buscar(url: String): ByteArray?
     }
 
-    /** Buscador padrão, definido pelo app (via rede). Nulo = sem completar. */
+    /** Buscador padrão, definido pelo app (via rede). Nulo = sem buscar na rede. */
     @Volatile
     var padrao: Buscador? = null
+
+    /**
+     * CAs embutidas no app (ex.: cadeias da AC-OAB), usadas antes da rede.
+     * Definidas pelo app ao iniciar.
+     */
+    @Volatile
+    var caisLocais: List<X509Certificate> = emptyList()
 
     private const val OID_AIA = "1.3.6.1.5.5.7.1.1"
     private const val OID_CA_ISSUERS = "1.3.6.1.5.5.7.48.2"
@@ -37,10 +44,11 @@ object CompletadorCadeia {
     fun completar(
         inicial: List<X509Certificate>,
         buscador: Buscador? = padrao,
+        locais: List<X509Certificate> = caisLocais,
         maxExtra: Int = 8,
         aiaDe: (X509Certificate) -> List<String> = ::caIssuers,
     ): List<X509Certificate> {
-        if (inicial.isEmpty() || buscador == null) return inicial
+        if (inicial.isEmpty() || (buscador == null && locais.isEmpty())) return inicial
         val cf = CertificateFactory.getInstance("X.509")
         val saida = ArrayList(inicial)
         var extra = 0
@@ -49,10 +57,16 @@ object CompletadorCadeia {
             if (ehAutoAssinado(topo)) break
             // Se o emissor já está na cadeia, nada a fazer.
             if (saida.any { it !== topo && emissorDe(topo, it) }) break
-            val candidatos = aiaDe(topo).asSequence()
-                .mapNotNull { runCatching { buscador.buscar(it) }.getOrNull() }
-                .flatMap { bytes -> lerCertificados(cf, bytes).asSequence() }
-            val emissor = candidatos.firstOrNull { emissorDe(topo, it) } ?: break
+            // 1) procura o emissor nas CAs embutidas (sem rede);
+            // 2) se não achar, baixa pelo AIA.
+            val emissor = locais.firstOrNull { emissorDe(topo, it) }
+                ?: buscador?.let { b ->
+                    aiaDe(topo).asSequence()
+                        .mapNotNull { runCatching { b.buscar(it) }.getOrNull() }
+                        .flatMap { bytes -> lerCertificados(cf, bytes).asSequence() }
+                        .firstOrNull { emissorDe(topo, it) }
+                }
+                ?: break
             if (saida.any { mesmo(it, emissor) }) break
             saida.add(emissor)
             extra++

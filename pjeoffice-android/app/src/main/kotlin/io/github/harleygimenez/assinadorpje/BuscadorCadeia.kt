@@ -1,19 +1,44 @@
 package io.github.harleygimenez.assinadorpje
 
+import android.content.Context
 import io.github.harleygimenez.assinadorpje.core.CompletadorCadeia
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Baixa certificados de CA pela rede (campo AIA), para completar a cadeia
- * ICP-Brasil/AC-OAB no aparelho. Mantém um cache em memória por URL.
+ * Completa a cadeia de certificados no aparelho: primeiro pelas CAs embutidas
+ * (cadeias da AC-OAB em `assets/cadeia-icp/`), depois pela rede (campo AIA).
+ * Mantém um cache em memória por URL.
  */
 object BuscadorCadeia : CompletadorCadeia.Buscador {
     private val cache = ConcurrentHashMap<String, ByteArray>()
 
-    fun instalar() {
+    fun instalar(ctx: Context) {
         CompletadorCadeia.padrao = this
+        CompletadorCadeia.caisLocais = carregarEmbutidas(ctx)
+    }
+
+    /** Lê as cadeias (.p7c/.cer/.pem) de `assets/cadeia-icp/`. */
+    private fun carregarEmbutidas(ctx: Context): List<X509Certificate> {
+        val cf = CertificateFactory.getInstance("X.509")
+        val certs = mutableListOf<X509Certificate>()
+        try {
+            val assets = ctx.assets
+            for (nome in assets.list("cadeia-icp").orEmpty()) {
+                runCatching {
+                    assets.open("cadeia-icp/$nome").use { entrada ->
+                        val bytes = entrada.readBytes()
+                        cf.generateCertificates(bytes.inputStream()).forEach { certs += it as X509Certificate }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Sem assets de cadeia: segue só com a rede (AIA).
+        }
+        return certs.distinctBy { it.subjectX500Principal to it.serialNumber }
     }
 
     override fun buscar(url: String): ByteArray? {
