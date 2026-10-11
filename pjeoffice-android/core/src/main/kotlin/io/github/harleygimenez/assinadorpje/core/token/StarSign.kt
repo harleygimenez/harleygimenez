@@ -125,21 +125,24 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
     }
 
     /**
-     * No CDF, extrai o caminho de cada certificado: dentro do `[1]`
-     * certAttributes (0xA1), o endereço é o primeiro OCTET STRING (procurado
-     * de forma recursiva, pois pode estar aninhado em SEQUENCEs: certAttributes
-     * → X509CertificateAttributes → Path → OCTET STRING).
+     * No CDF há um certificado por objeto (o seu + CAs). O endereço de cada um
+     * é um OCTET STRING com o caminho de arquivo (começa com 3F00/3FFF).
+     * Varremos o CDF inteiro e coletamos todos esses caminhos.
      */
     private fun caminhosNoCdf(cdf: ByteArray): List<ByteArray> {
-        val topo = Der.ler(cdf).firstOrNull { it.construido } ?: return emptyList()
-        val objetos = if (topo.filhos().any { it.tag == 0xA1 }) listOf(topo) else topo.filhos()
         val caminhos = mutableListOf<ByteArray>()
-        for (obj in objetos) {
-            val a1 = obj.filhos().firstOrNull { it.tag == 0xA1 } ?: continue
-            val oct = a1.todos().firstOrNull { it.tag == 0x04 && it.valor.size in 2..32 } ?: continue
-            caminhos += oct.valor
+        fun varrer(nos: List<Tlv>) {
+            for (n in nos) {
+                val v = n.valor
+                val ehCaminho = n.tag == 0x04 && v.size in 4..10 &&
+                    (v[0].toInt() and 0xFF) == 0x3F &&
+                    ((v[1].toInt() and 0xFF) == 0xFF || (v[1].toInt() and 0xFF) == 0x00)
+                if (ehCaminho) caminhos += v
+                if (n.construido) varrer(n.filhos())
+            }
         }
-        return caminhos
+        varrer(Der.ler(cdf))
+        return caminhos.distinctBy { Hex.de(it) }
     }
 
     /** Lê um certificado pelo caminho do CDF (ignora MF 3F00 e placeholder 3FFF). */
