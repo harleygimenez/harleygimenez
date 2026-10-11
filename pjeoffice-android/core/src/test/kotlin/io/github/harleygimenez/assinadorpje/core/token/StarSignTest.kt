@@ -23,11 +23,14 @@ class CartaoSimulado(
     private val chave: RSAPrivateCrtKey,
     private val certLeaf: ByteArray,
     private val pinCerto: String = "1234",
+    /** Referência de chave que o cartão aceita no MSE SET (as demais dão 6A88). */
+    private val chaveRefCorreta: Int = 0x45,
 ) : Transporte {
     override val atr = Hex.bytes(StarSign.ATR_CONHECIDO)
 
     var tentativas = 3
     var autenticado = false
+    var refMseAceita: Int? = null
     private var appletAtivo = false
     private var canalAberto = false
     private var mseFeito = false
@@ -53,9 +56,9 @@ class CartaoSimulado(
                     val fid = Hex.de(dados).replace(" ", "")
                     if (fid == "2F01") { efSelecionado = fid; sw(0x9000) } else sw(0x6A82)
                 }
-                else -> { // SELECT por FID (ODF/CDF/DF)
+                else -> { // SELECT por FID (ODF/CDF/PrKDF/DF)
                     val fid = Hex.de(dados).replace(" ", "")
-                    efSelecionado = if (fid == "5031" || fid == "4404") fid else null
+                    efSelecionado = if (fid in setOf("5031", "4404", "4400")) fid else null
                     sw(0x9000)
                 }
             }
@@ -68,7 +71,11 @@ class CartaoSimulado(
                     else { tentativas--; if (tentativas <= 0) sw(0x6983) else sw(0x63C0 or tentativas) }
                 }
             }
-            0x22 -> { mseFeito = true; sw(0x9000) } // MSE SET
+            0x22 -> { // MSE SET: só aceita a referência de chave correta
+                val ref = if (lc >= 3 && (dados[0].toInt() and 0xFF) == 0x84) dados[2].toInt() and 0xFF else -1
+                if (ref == chaveRefCorreta) { mseFeito = true; refMseAceita = ref; sw(0x9000) }
+                else sw(0x6A88) // dado de referência não encontrado
+            }
             0x2A -> { // PSO: COMPUTE DIGITAL SIGNATURE
                 if (!autenticado) return sw(0x6982)
                 if (!mseFeito) return sw(0x6985)
@@ -78,6 +85,7 @@ class CartaoSimulado(
                 val conteudo = when (efSelecionado) {
                     "5031" -> ODF
                     "4404" -> CDF
+                    "4400" -> PRKDF
                     "2F01" -> certLeaf
                     else -> return sw(0x6986)
                 }
@@ -90,8 +98,14 @@ class CartaoSimulado(
         }
     }
 
-    /** ODF: certificados [4] (0xA4) → EF 4404 (CDF). */
-    private val ODF = Hex.bytes("A4 06 30 04 04 02 44 04")
+    /** ODF: chaves privadas [0] (0xA0) → EF 4400 (PrKDF) e certificados [4] (0xA4) → EF 4404 (CDF). */
+    private val ODF = Hex.bytes("A0 06 30 04 04 02 44 00  A4 06 30 04 04 02 44 04")
+
+    /**
+     * PrKDF com uma chave RSA: PrivateKeyObject → CommonKeyAttributes (iD +
+     * usage + keyReference 0x45). A referência 0x45 é a que o MSE SET aceita.
+     */
+    private val PRKDF = Hex.bytes("30 12 30 00 30 0A 04 01 45 03 02 06 C0 02 01 45 A1 02 30 00")
 
     /**
      * CDF como no token real: objeto do certificado com certAttributes [1]
@@ -165,6 +179,25 @@ class StarSignTest {
             verify(assinatura)
         }
         assertTrue(ok, "a assinatura do token deve valer como SHA256withRSA")
+    }
+
+    @Test
+    fun `descobre a referência de chave no PrKDF e a usa no MSE SET`() {
+        val c = cartao()
+        val s = StarSign(c).apply { abrir(); verificarPin("1234".toCharArray()) }
+        assertEquals(listOf("45"), s.refsDeChaveHex())
+        s.assinarSha256("x".toByteArray())
+        assertEquals(0x45, c.refMseAceita)
+        assertEquals("45", s.chaveRefUsadaHex())
+    }
+
+    @Test
+    fun `assina mesmo quando a chave do token não é a referência 01`() {
+        // O cartão só aceita 0x45; o 01 fixo antigo daria 6A88. A descoberta resolve.
+        val c = CartaoSimulado(par.private as RSAPrivateCrtKey, cert, "1234", chaveRefCorreta = 0x45)
+        val s = StarSign(c).apply { abrir(); verificarPin("1234".toCharArray()) }
+        val assinatura = s.assinarSha256("autenticação".toByteArray())
+        assertEquals(256, assinatura.size)
     }
 
     @Test

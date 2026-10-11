@@ -21,6 +21,12 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
 
     private var canal = 0
 
+    /** Referências de chave descobertas no PrKDF (a tentar na assinatura). */
+    @Volatile private var chavesRef: List<Int> = listOf(1)
+    @Volatile private var chavesDescobertas = false
+    /** Referência de chave que funcionou na última assinatura (diagnóstico). */
+    @Volatile private var chaveRefUsada: Int = -1
+
     private fun env(cla: Int, ins: Int, p1: Int, p2: Int, dados: ByteArray? = null, le: Int? = null): RespostaApdu {
         val apdu = Apdu.montar(cla or canal, ins, p1, p2, dados, le)
         log?.add("→ ${Hex.de(apdu, 24)}")
@@ -189,13 +195,82 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
     /**
      * Assina [dados] com SHA-256 + RSA. Monta o DigestInfo aqui (o cartão não o
      * faz) e envia o bloco já pronto; o cartão aplica o padding PKCS#1 e a RSA.
+     *
+     * A referência da chave (keyReference) varia por token e por emissão: usar
+     * `01` fixo fazia o MSE SET responder 6A88 ("dado de referência não
+     * encontrado"). Descobrimos as referências reais no PrKDF e tentamos cada
+     * uma até o cartão aceitar.
      */
     fun assinarSha256(dados: ByteArray): ByteArray {
-        env(0, 0x22, 0x41, 0xB6, MSE_SET).exigirOk("preparar a assinatura")
         val hash = java.security.MessageDigest.getInstance("SHA-256").digest(dados)
         val digestInfo = Algoritmos.digestInfo("SHA-256", hash)
-        val r = env(0, 0x2A, 0x9E, 0x9A, digestInfo, le = 256)
-        return r.exigirOk("gerar a assinatura")
+        val refs = refsDeAssinatura()
+        var erro: RespostaApdu? = null
+        for (ref in refs) {
+            val mse = byteArrayOf(0x84.toByte(), 0x01, ref.toByte(), 0x80.toByte(), 0x01, 0x02)
+            val m = env(0, 0x22, 0x41, 0xB6, mse)
+            if (!m.ok) { erro = m; continue }
+            val r = env(0, 0x2A, 0x9E, 0x9A, digestInfo, le = 256)
+            if (r.ok) { chaveRefUsada = ref; return r.dados }
+            erro = r
+        }
+        return (erro ?: RespostaApdu(ByteArray(0), 0x6A88)).exigirOk(
+            "gerar a assinatura (nenhuma referência de chave aceita: ${refs.joinToString { "%02X".format(it) }})"
+        )
+    }
+
+    /** Lista de referências de chave a tentar na assinatura (descobre uma vez). */
+    private fun refsDeAssinatura(): List<Int> {
+        if (!chavesDescobertas) {
+            val achadas = descobrirChavesRef()
+            // Mantém 0x01 como última tentativa caso a descoberta falhe ou o
+            // token aceite esse valor por compatibilidade.
+            chavesRef = (achadas + 1).distinct().ifEmpty { listOf(1) }
+            chavesDescobertas = true
+        }
+        return chavesRef
+    }
+
+    /** Referência de chave usada na última assinatura, em hex (diagnóstico). */
+    fun chaveRefUsadaHex(): String = if (chaveRefUsada >= 0) "%02X".format(chaveRefUsada) else "—"
+
+    /** Referências de chave encontradas no PrKDF, em hex (diagnóstico). */
+    fun refsDeChaveHex(): List<String> =
+        runCatching { descobrirChavesRef() }.getOrDefault(emptyList()).map { "%02X".format(it) }
+
+    /**
+     * Descobre as referências de chave privada no PrKDF (EF apontado pelo
+     * contexto [0] do ODF; 4400 por padrão). Cada chave carrega o keyReference
+     * num INTEGER curto dentro do CommonKeyAttributes.
+     */
+    private fun descobrirChavesRef(): List<Int> = runCatching {
+        val odf = lerEf("5031")
+        val prkdfFid = fidNoOdf(odf, 0xA0) ?: "4400"
+        val prkdf = lerEf(prkdfFid)
+        refsNoPrkdf(prkdf)
+    }.getOrDefault(emptyList())
+
+    /**
+     * No PrKDF, o CommonKeyAttributes é um SEQUENCE que traz o iD (OCTET STRING)
+     * e o usage (BIT STRING); o keyReference é um INTEGER de 1 byte ali dentro.
+     */
+    private fun refsNoPrkdf(prkdf: ByteArray): List<Int> {
+        val refs = mutableListOf<Int>()
+        fun ehAtributosDeChave(seq: Tlv): Boolean {
+            val f = seq.filhos()
+            return f.any { it.tag == 0x04 } && f.any { it.tag == 0x03 }
+        }
+        fun varrer(nos: List<Tlv>) {
+            for (n in nos) {
+                if (n.tag == 0x30 && ehAtributosDeChave(n)) {
+                    n.filhos().firstOrNull { it.tag == 0x02 && it.valor.size == 1 }
+                        ?.let { refs += it.valor[0].toInt() and 0xFF }
+                }
+                if (n.construido) varrer(n.filhos())
+            }
+        }
+        varrer(Der.ler(prkdf))
+        return refs.distinct()
     }
 
     fun fechar() = runCatching { transporte.close() }
@@ -209,7 +284,7 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
         val sb = StringBuilder()
         val candidatos = listOf(
             "5031", "5032", "5033", "6050",
-            "4401", "4402", "4403", "4404", "4405", "4406", "4407", "4408", "4409",
+            "4400", "4401", "4402", "4403", "4404", "4405", "4406", "4407", "4408", "4409",
             "4301", "4302", "4303", "4304", "4305", "4306",
         )
         for (c in candidatos) {
@@ -250,9 +325,6 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
 
         /** String que o applet exige via PUT DATA para liberar as operações. */
         val DRM = "I am A.E.T. Europe B.V. SafeSign or BlueX approved software.".toByteArray(Charsets.US_ASCII)
-
-        /** MSE SET: key ref 0x01, algoritmo 0x02 — nesta ordem (o cartão exige). */
-        val MSE_SET = Hex.bytes("84 01 01 80 01 02")
 
         const val PIN_REF = 0x02
         const val PIN_MAX = 15

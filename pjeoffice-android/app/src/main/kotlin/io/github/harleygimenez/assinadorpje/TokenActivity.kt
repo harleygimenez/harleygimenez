@@ -191,6 +191,10 @@ class TokenActivity : Activity() {
                 escrever("  [$i] ${Certificados.descrever(c).replace("\n", " — ")}")
             }
 
+            runCatching { token.refsDeChaveHex() }.getOrNull()?.let { refs ->
+                if (refs.isNotEmpty()) escrever("  Referências de chave (PrKDF): ${refs.joinToString(", ")}")
+            }
+
             escrever("\nEstrutura PKCS#15 (para localizar os certificados):")
             escrever(runCatching { token.explorarPkcs15() }.getOrElse { "  (falha ao varrer: ${it.message})" })
 
@@ -216,7 +220,7 @@ class TokenActivity : Activity() {
             val assinante = AssinanteStarSign(token, cadeiaPos)
             val dados = "teste de assinatura assinador-pje ${System.currentTimeMillis()}".toByteArray()
             val assinatura = assinante.assinar("SHA256withRSA", dados)
-            escrever("✔ Assinatura gerada: ${assinatura.size} bytes.")
+            escrever("✔ Assinatura gerada: ${assinatura.size} bytes (chave ref ${token.chaveRefUsadaHex()}).")
             val ok = Signature.getInstance("SHA256withRSA").run {
                 initVerify(cadeiaPos.first().publicKey); update(dados); verify(assinatura)
             }
