@@ -59,6 +59,7 @@ class TokenActivity : Activity() {
             .also { raiz.addView(it) }
         botaoAssinar = Ui.botao(this, "Testar assinatura (pede o PIN)") { avisarEAssinar() }
             .also { raiz.addView(it) }
+        raiz.addView(Ui.botao(this, "Usar este token para assinar no PJe") { usarNoPje() })
         raiz.addView(Ui.botao(this, "Copiar log técnico") {
             getSystemService(android.content.ClipboardManager::class.java)
                 ?.setPrimaryClip(android.content.ClipData.newPlainText("log token", log.texto()))
@@ -215,6 +216,36 @@ class TokenActivity : Activity() {
             else "✖ A assinatura NÃO confere — reporte o log técnico.")
         } finally {
             leitor.close()
+        }
+    }
+
+    /** Lê o certificado (sem PIN) e marca o token como a fonte de assinatura do PJe. */
+    private fun usarNoPje() {
+        limpar()
+        comToken { device ->
+            Thread {
+                try {
+                    val leitor = UsbCcid.abrir(servico(), device, log)
+                    try {
+                        val token = StarSign(leitor, log)
+                        token.abrir()
+                        val cadeia = token.lerCadeia()
+                        if (cadeia.isEmpty()) {
+                            escrever("✖ Não foi possível ler o certificado do token (pode exigir PIN). Tente o diagnóstico.")
+                            return@Thread
+                        }
+                        val desc = "Token StarSign — " + Certificados.descrever(cadeia.first())
+                        app.certificados.usarToken(desc)
+                        escrever("✔ Token definido como certificado do PJe.\n$desc\n\nAgora abra o PJe no app e faça o login; o PIN será pedido na hora de assinar.")
+                    } finally {
+                        leitor.close()
+                    }
+                } catch (e: ErroToken) {
+                    escrever("✖ ${e.message}")
+                } catch (e: Exception) {
+                    escrever("✖ Erro inesperado: ${e.javaClass.simpleName}: ${e.message}")
+                }
+            }.start()
         }
     }
 

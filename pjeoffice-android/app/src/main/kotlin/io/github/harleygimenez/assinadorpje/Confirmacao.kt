@@ -27,7 +27,12 @@ class PedidoPendente(val id: Int, val pedido: Pedido) {
     var aprovado = false
         private set
 
-    fun responder(ok: Boolean) {
+    /** PIN digitado para o token (quando a fonte é TOKEN). Zerado após o uso. */
+    @Volatile
+    var pin: CharArray? = null
+
+    fun responder(ok: Boolean, pin: CharArray? = null) {
+        this.pin = pin
         aprovado = ok
         latch.countDown()
     }
@@ -48,8 +53,24 @@ object CentralConfirmacao {
     fun obter(id: Int): PedidoPendente? = pendentes[id]
 
     /** Responde uma única vez; chamadas repetidas são ignoradas. */
-    fun responder(id: Int, ok: Boolean) {
-        pendentes.remove(id)?.responder(ok)
+    fun responder(id: Int, ok: Boolean, pin: CharArray? = null) {
+        pendentes.remove(id)?.responder(ok, pin)
+    }
+}
+
+/**
+ * Depois de aprovado, produz o [Assinante]: o token é aberto aqui (com o PIN
+ * digitado), os demais vêm de [Certificados.assinante]. Zera o PIN em seguida.
+ */
+private fun assinanteAprovado(ctx: Context, pendente: PedidoPendente): Assinante? {
+    val certificados = ctx.app.certificados
+    if (certificados.fonte != Certificados.Fonte.TOKEN) return certificados.assinante()
+    val pin = pendente.pin ?: return null
+    return try {
+        AcessoToken.abrir(ctx, pin)
+    } finally {
+        pin.fill('\u0000')
+        pendente.pin = null
     }
 }
 
@@ -85,11 +106,18 @@ object DialogoConfirmacao {
                 )
             )
         }
+        val ehToken = certificados.fonte == Certificados.Fonte.TOKEN
         corpo.addView(Ui.texto(activity, "Certificado:\n${certificados.descricao}", tamanho = 14f))
+        if (ehToken) {
+            corpo.addView(Ui.texto(activity, "O token A3 será lido pelo cabo USB. PIN errado consome tentativa e pode bloquear o token.", Ui.ALERTA, 13f))
+        }
 
-        val senha = if (certificados.precisaSenha) EditText(activity).apply {
-            hint = "Senha do certificado"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        // Pede senha para o .pfx bloqueado; pede PIN para o token.
+        val precisaSegredo = certificados.precisaSenha || ehToken
+        val segredo = if (precisaSegredo) EditText(activity).apply {
+            hint = if (ehToken) "PIN do token" else "Senha do certificado"
+            inputType = if (ehToken) InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }.also { corpo.addView(it) } else null
         val erro = Ui.texto(activity, "", Ui.ALERTA, 13f)
         corpo.addView(erro)
@@ -100,15 +128,23 @@ object DialogoConfirmacao {
             .create()
         dialogo.setOnShowListener {
             dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                if (senha != null) {
-                    try {
-                        certificados.desbloquear(senha.text.toString().toCharArray())
-                    } catch (e: Exception) {
-                        erro.text = e.message ?: "Senha incorreta"
-                        return@setOnClickListener
+                when {
+                    ehToken -> {
+                        val pin = segredo?.text?.toString().orEmpty()
+                        if (pin.isEmpty()) { erro.text = "Informe o PIN do token"; return@setOnClickListener }
+                        CentralConfirmacao.responder(pendente.id, true, pin.toCharArray())
                     }
+                    segredo != null -> {
+                        try {
+                            certificados.desbloquear(segredo.text.toString().toCharArray())
+                        } catch (e: Exception) {
+                            erro.text = e.message ?: "Senha incorreta"
+                            return@setOnClickListener
+                        }
+                        CentralConfirmacao.responder(pendente.id, true)
+                    }
+                    else -> CentralConfirmacao.responder(pendente.id, true)
                 }
-                CentralConfirmacao.responder(pendente.id, true)
                 dialogo.dismiss()
             }
         }
@@ -129,7 +165,7 @@ class ConfirmadorNaTela(private val activity: Activity) : Confirmador {
             CentralConfirmacao.responder(pendente.id, false)
             return null
         }
-        return certificados.assinante()
+        return assinanteAprovado(activity, pendente)
     }
 }
 
@@ -170,13 +206,13 @@ class ConfirmadorPorNotificacao(private val ctx: Context) : Confirmador {
             .build()
         val idNotificacao = Notificacoes.ID_PEDIDO_BASE + pendente.id
         nm.notify(idNotificacao, n)
-        val ok = try {
-            pendente.aguardar(3)
-        } finally {
+        val ok = pendente.aguardar(3)
+        nm.cancel(idNotificacao)
+        if (!ok) {
             CentralConfirmacao.responder(pendente.id, false)
-            nm.cancel(idNotificacao)
+            return null
         }
-        return if (ok) ctx.app.certificados.assinante() else null
+        return assinanteAprovado(ctx, pendente)
     }
 }
 

@@ -24,7 +24,7 @@ import java.util.Locale
  */
 class Certificados(private val ctx: Context) {
 
-    enum class Fonte { NENHUM, PFX, KEYCHAIN }
+    enum class Fonte { NENHUM, PFX, KEYCHAIN, TOKEN }
 
     private val prefs = ctx.getSharedPreferences("certificado", Context.MODE_PRIVATE)
     private val arquivoPfx: File get() = File(ctx.filesDir, "certificado.p12")
@@ -75,6 +75,20 @@ class Certificados(private val ctx: Context) {
         desbloqueado = null
     }
 
+    /**
+     * Passa a usar o token A3 (StarSign). Só guarda a descrição lida no
+     * diagnóstico; a assinatura abre o token e pede o PIN a cada uso.
+     */
+    fun usarToken(descricao: String) {
+        prefs.edit()
+            .putString("fonte", Fonte.TOKEN.name)
+            .putString("descricao", descricao)
+            .remove("alias")
+            .apply()
+        arquivoPfx.delete()
+        desbloqueado = null
+    }
+
     fun remover() {
         prefs.edit().clear().apply()
         arquivoPfx.delete()
@@ -90,6 +104,8 @@ class Certificados(private val ctx: Context) {
             val cadeia = alias?.let { KeyChain.getCertificateChain(ctx, it) }
             if (chave == null || cadeia.isNullOrEmpty()) null else AssinanteJca(chave, cadeia.toList())
         }
+        // O token é aberto sob demanda (precisa do PIN e do USB); ver AcessoToken.
+        Fonte.TOKEN -> null
         Fonte.NENHUM -> null
     }
 

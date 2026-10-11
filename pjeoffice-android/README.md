@@ -31,6 +31,8 @@ O site do PJe conversa com o assinador chamando `http://127.0.0.1:8800/pjeOffice
 
 > **Cuidado com o PIN do token.** Esses tokens bloqueiam após poucas tentativas de PIN erradas. O app lê o contador de tentativas antes e aborta sozinho se restarem poucas, mas confira o número mostrado antes de digitar o PIN.
 
+**Usar o token no login/assinatura do PJe:** em *Diagnóstico do token*, toque em **Usar este token para assinar no PJe** (lê o certificado sem PIN e define o token como certificado ativo). Depois abra o PJe pelo navegador do app: quando o PJe pedir a assinatura, o app abre o token e pede o PIN na hora. O token só funciona pelo **navegador do app** (em primeiro plano, por causa da permissão de USB); pelo Chrome ainda não.
+
 ### Tarefas do PJe suportadas
 
 | `tarefaId` | Para que serve | Situação |
@@ -91,7 +93,7 @@ Gerar um keystore: `keytool -genkeypair -v -keystore assinador.jks -alias assina
 
 - Testar login e assinatura em PJe reais (TRF, TRT, TJ) e ajustar o que aparecer no Registro.
 - `cnj.assinador` (assinatura CMS/PAdES de arquivos) com BouncyCastle.
-- Concluir o token A3 StarSign CUT S (ligar a assinatura do PJe ao token, não só o diagnóstico) e, depois, outros modelos e certificados em nuvem.
+- Token A3 StarSign CUT S pelo Chrome (hoje só pelo navegador do app) e, depois, outros modelos de token e certificados em nuvem.
 
 ## Créditos
 

@@ -134,6 +134,7 @@ class MainActivity : Activity() {
             Certificados.Fonte.NENHUM -> "Nenhum certificado configurado."
             Certificados.Fonte.PFX -> "Arquivo A1 ${if (c.precisaSenha) "(bloqueado)" else "(desbloqueado)"}\n${c.descricao}"
             Certificados.Fonte.KEYCHAIN -> "Certificado do Android\n${c.descricao}"
+            Certificados.Fonte.TOKEN -> "Token A3 (USB)\n${c.descricao}"
         }
         botaoDesbloquear.visibility = if (c.fonte == Certificados.Fonte.PFX) android.view.View.VISIBLE else android.view.View.GONE
         botaoDesbloquear.text = if (c.precisaSenha) "Desbloquear (digitar a senha)" else "Bloquear (esquecer a senha)"

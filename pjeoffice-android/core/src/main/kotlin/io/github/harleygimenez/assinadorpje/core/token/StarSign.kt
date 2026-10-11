@@ -193,4 +193,9 @@ class AssinanteStarSign(
     override fun assinarResumo(resumo: String, hash: ByteArray): ByteArray {
         throw ErroToken("Assinatura de hash pronto ainda não suportada pelo token")
     }
+
+    /** Encerra a sessão USB do token assim que a tarefa de assinatura termina. */
+    override fun close() {
+        sessao.fechar()
+    }
 }

@@ -7,9 +7,15 @@ import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.util.Base64
 
-/** Quem assina: uma chave privada RSA e a cadeia do certificado (folha primeiro). */
-interface Assinante {
+/**
+ * Quem assina: uma chave privada RSA e a cadeia do certificado (folha
+ * primeiro). É [AutoCloseable] para que assinantes com recurso vivo (token
+ * USB) liberem a sessão assim que a tarefa termina; [close] é no-op por padrão.
+ */
+interface Assinante : AutoCloseable {
     val cadeia: List<X509Certificate>
+
+    override fun close() {}
 
     /**
      * Assina [dados] com um algoritmo no formato do PJe: `MD5withRSA`,

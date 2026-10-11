@@ -160,6 +160,9 @@ class Processador(
             Resultado(false, e.message ?: "Erro na tarefa")
         } catch (e: Exception) {
             Resultado(false, "Falha na tarefa: ${e.javaClass.simpleName}: ${e.message}")
+        } finally {
+            // Libera recurso vivo (sessão USB do token). No-op para A1/KeyChain.
+            runCatching { assinante.close() }
         }
     }
 
