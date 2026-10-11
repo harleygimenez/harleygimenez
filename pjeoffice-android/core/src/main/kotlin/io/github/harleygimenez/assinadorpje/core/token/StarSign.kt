@@ -198,18 +198,23 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
     /** Ordena a cadeia com a folha primeiro, subindo pelos emissores. */
     private fun ordenarCadeia(certs: List<X509Certificate>): List<X509Certificate> = Companion.ordenarCadeia(certs)
 
+    /** Assina [dados] com SHA-256 + RSA (calcula o hash e delega). */
+    fun assinarSha256(dados: ByteArray): ByteArray =
+        assinarResumo("SHA-256", java.security.MessageDigest.getInstance("SHA-256").digest(dados))
+
     /**
-     * Assina [dados] com SHA-256 + RSA. Monta o DigestInfo aqui (o cartão não o
-     * faz) e envia o bloco já pronto; o cartão aplica o padding PKCS#1 e a RSA.
+     * Assina um resumo já calculado ([hash]) com RSA, montando o DigestInfo do
+     * [resumo] (MD5, SHA-1, SHA-256...). O cartão só faz o padding PKCS#1 v1.5 e
+     * a exponenciação RSA sobre esse DigestInfo, então ele serve para qualquer
+     * algoritmo — basta montarmos o DigestInfo certo aqui.
      *
      * A referência da chave (keyReference) varia por token e por emissão: usar
      * `01` fixo fazia o MSE SET responder 6A88 ("dado de referência não
-     * encontrado"). Descobrimos as referências reais no PrKDF e tentamos cada
-     * uma até o cartão aceitar.
+     * encontrado"). Descobrimos as referências reais no PrKDF (no abrir()) e
+     * tentamos cada uma até o cartão aceitar.
      */
-    fun assinarSha256(dados: ByteArray): ByteArray {
-        val hash = java.security.MessageDigest.getInstance("SHA-256").digest(dados)
-        val digestInfo = Algoritmos.digestInfo("SHA-256", hash)
+    fun assinarResumo(resumo: String, hash: ByteArray): ByteArray {
+        val digestInfo = Algoritmos.digestInfo(resumo, hash)
         val refs = refsDeAssinatura() // já descoberto no abrir(); não faz SELECT AID aqui
         reautenticar() // reenvia o PIN imediatamente antes do MSE SET (sem SELECT AID no meio)
         var erro: RespostaApdu? = null
@@ -382,19 +387,16 @@ class AssinanteStarSign(
 
     override fun assinar(algoritmo: String, dados: ByteArray): ByteArray {
         val resumo = Algoritmos.resumoDe(algoritmo)
-        if (resumo != "SHA-256") {
-            // O PJe pede SHA-256 no SSO; os demais exigiriam outro algoritmo no cartão.
-            throw ErroToken("O token só assina com SHA-256 nesta versão (pediram $algoritmo)")
-        }
-        if (Algoritmos.resumoPronto(algoritmo)) {
-            throw ErroToken("Assinatura de hash pronto ainda não suportada pelo token")
-        }
-        return sessao.assinarSha256(dados)
+        // `ASN1...withRSA`: `dados` já é o resumo pronto (o PJe manda o hash do documento).
+        if (Algoritmos.resumoPronto(algoritmo)) return assinarResumo(resumo, dados)
+        // O PJe SSO pede SHA-256; o login clássico (cnj.autenticador) pede MD5withRSA.
+        // O cartão assina qualquer um: calculamos o hash e montamos o DigestInfo certo.
+        val hash = java.security.MessageDigest.getInstance(resumo).digest(dados)
+        return sessao.assinarResumo(resumo, hash)
     }
 
-    override fun assinarResumo(resumo: String, hash: ByteArray): ByteArray {
-        throw ErroToken("Assinatura de hash pronto ainda não suportada pelo token")
-    }
+    override fun assinarResumo(resumo: String, hash: ByteArray): ByteArray =
+        sessao.assinarResumo(resumo, hash)
 
     /** Encerra a sessão USB do token assim que a tarefa de assinatura termina. */
     override fun close() {

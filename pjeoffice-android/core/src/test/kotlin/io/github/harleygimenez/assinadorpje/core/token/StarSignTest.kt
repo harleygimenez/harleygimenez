@@ -256,15 +256,20 @@ class StarSignTest {
     }
 
     @Test
-    fun `AssinanteStarSign recusa algoritmo diferente de SHA-256`() {
+    fun `AssinanteStarSign assina MD5withRSA e SHA256withRSA`() {
+        // O PJe SSO pede SHA256withRSA; o login clássico (cnj.autenticador, ex.:
+        // TJRJ) pede MD5withRSA. O token assina os dois.
         val c = cartao()
         val s = StarSign(c).apply { abrir(); verificarPin("1234".toCharArray()) }
         val a = AssinanteStarSign(s, s.lerCadeia())
-        assertFailsWith<ErroToken> { a.assinar("MD5withRSA", "x".toByteArray()) }
-        val ok = Signature.getInstance("SHA256withRSA").run {
+        val okMd5 = Signature.getInstance("MD5withRSA").run {
+            initVerify(par.public); update("x".toByteArray()); verify(a.assinar("MD5withRSA", "x".toByteArray()))
+        }
+        assertTrue(okMd5, "o token deve assinar MD5withRSA (login clássico do PJe)")
+        val okSha = Signature.getInstance("SHA256withRSA").run {
             initVerify(par.public); update("y".toByteArray()); verify(a.assinar("SHA256withRSA", "y".toByteArray()))
         }
-        assertTrue(ok)
+        assertTrue(okSha, "o token deve assinar SHA256withRSA (login SSO do PJe)")
     }
 }
 
