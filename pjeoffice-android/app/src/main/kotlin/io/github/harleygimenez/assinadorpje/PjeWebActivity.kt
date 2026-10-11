@@ -7,6 +7,7 @@ import android.app.DownloadManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -22,6 +23,8 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.Toast
 import io.github.harleygimenez.assinadorpje.core.Processador
 import io.github.harleygimenez.assinadorpje.core.RespostaPje
@@ -55,8 +58,11 @@ class PjeWebActivity : Activity() {
             cookiesPara = { servidor -> CookieManager.getInstance().getCookie(servidor) },
         )
 
+        // Esconde a barra de cima (ActionBar): ela tampava o painel do tribunal.
+        // Os controles vão para uma barra fininha embaixo (ver construirBarraInferior).
+        actionBar?.hide()
+
         web = WebView(this)
-        setContentView(web)
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.settings.apply {
@@ -102,11 +108,54 @@ class PjeWebActivity : Activity() {
             baixar(url, userAgent, contentDisposition, mimetype)
         }
 
+        // WebView ocupa todo o topo; a barra de controles fica embaixo.
+        val raiz = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        raiz.addView(web, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        raiz.addView(construirBarraInferior())
+        setContentView(raiz)
+
         if (savedInstanceState != null) {
             web.restoreState(savedInstanceState)
         } else {
             web.loadUrl(intent.getStringExtra(EXTRA_URL) ?: Tribunais.lista.first().second)
         }
+    }
+
+    /** Barra fininha embaixo com os controles (substitui a ActionBar de cima). */
+    private fun construirBarraInferior(): LinearLayout {
+        val barra = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Ui.AZUL)
+        }
+        fun item(rotulo: String, aoClicar: () -> Unit) {
+            barra.addView(Button(this).apply {
+                text = rotulo
+                isAllCaps = false
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.TRANSPARENT)
+                val pv = Ui.dp(this@PjeWebActivity, 6)
+                setPadding(0, pv, 0, pv)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setOnClickListener { aoClicar() }
+            })
+        }
+        item("◀ Voltar") { if (web.canGoBack()) web.goBack() else finish() }
+        item("⟳ Recarregar") { web.reload() }
+        item("🖥 PC") { alternarComputador() }
+        item("⌂ Início") { finish() }
+        return barra
+    }
+
+    private fun alternarComputador() {
+        modoComputador = !modoComputador
+        web.settings.userAgentString = if (modoComputador) {
+            agentePadrao.replace(Regex("\\(Linux; Android[^)]*\\)"), "(X11; Linux x86_64)").replace(" Mobile", "")
+        } else {
+            agentePadrao
+        }
+        Toast.makeText(this, if (modoComputador) "Versão para computador" else "Versão para celular", Toast.LENGTH_SHORT).show()
+        web.reload()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -140,15 +189,7 @@ class PjeWebActivity : Activity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             MENU_RECARREGAR -> web.reload()
-            MENU_COMPUTADOR -> {
-                modoComputador = !modoComputador
-                web.settings.userAgentString = if (modoComputador) {
-                    agentePadrao.replace(Regex("\\(Linux; Android[^)]*\\)"), "(X11; Linux x86_64)").replace(" Mobile", "")
-                } else {
-                    agentePadrao
-                }
-                web.reload()
-            }
+            MENU_COMPUTADOR -> alternarComputador()
             MENU_INICIO -> finish()
             else -> return super.onOptionsItemSelected(item)
         }
