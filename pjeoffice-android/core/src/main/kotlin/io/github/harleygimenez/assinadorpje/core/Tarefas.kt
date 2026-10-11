@@ -71,7 +71,10 @@ private fun Map<String, Any?>.exigir(chave: String): String =
 private enum class Verificacao { NENHUMA, SE_ERRO, EXIGE_SUCESSO }
 
 private fun verificar(resposta: RespostaHttp, verificacao: Verificacao, ok: String): Resultado {
-    if (!resposta.sucesso) return Resultado(false, "Servidor retornou HTTP ${resposta.status}")
+    if (!resposta.sucesso) {
+        val detalhe = resposta.corpo.trim().replace(Regex("\\s+"), " ").take(300)
+        return Resultado(false, "Servidor retornou HTTP ${resposta.status}" + if (detalhe.isNotEmpty()) ": $detalhe" else "")
+    }
     val corpo = resposta.corpo
     if (verificacao != Verificacao.NENHUMA && corpo.startsWith("Erro:")) {
         val msg = corpo.removePrefix("Erro:").trim().ifEmpty { "Desconhecido" }
