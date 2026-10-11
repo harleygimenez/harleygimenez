@@ -27,7 +27,9 @@ O site do PJe conversa com o assinador chamando `http://127.0.0.1:8800/pjeOffice
 
 - **A1 (arquivo `.pfx`/`.p12`):** use *Importar certificado A1*. O arquivo é copiado para a área privada do app e continua protegido pela senha dele. A senha **não é gravada**: fica só na memória até você tocar em *Bloquear* ou o Android fechar o app.
 - **Certificado instalado no Android** (Configurações › Segurança › Criptografia e credenciais › Instalar certificado): use *Usar certificado instalado no Android*. A chave privada fica no armazenamento do sistema.
-- **A3 (token USB/cartão) e certificados em nuvem** (BirdID, SafeID, VIDaaS…): **ainda não**. O token exigiria USB OTG e um driver PKCS#11 para Android; os de nuvem exigem a API de cada fornecedor.
+- **A3 (token USB) — G&D StarSign CUT S:** suporte **em testes**, por USB OTG, sem precisar de driver do sistema. O app fala direto com o leitor (CCID) e com o applet SafeSign do token. Faça primeiro o **Diagnóstico do token** na tela inicial: ele conecta e lê os dados *sem enviar o PIN*, e só faz a assinatura de teste se você mandar. Outros modelos de token e certificados em nuvem (BirdID, SafeID, VIDaaS…) ainda não.
+
+> **Cuidado com o PIN do token.** Esses tokens bloqueiam após poucas tentativas de PIN erradas. O app lê o contador de tentativas antes e aborta sozinho se restarem poucas, mas confira o número mostrado antes de digitar o PIN.
 
 ### Tarefas do PJe suportadas
 
@@ -89,7 +91,7 @@ Gerar um keystore: `keytool -genkeypair -v -keystore assinador.jks -alias assina
 
 - Testar login e assinatura em PJe reais (TRF, TRT, TJ) e ajustar o que aparecer no Registro.
 - `cnj.assinador` (assinatura CMS/PAdES de arquivos) com BouncyCastle.
-- Token A3 via USB OTG (PKCS#11) e certificados em nuvem.
+- Concluir o token A3 StarSign CUT S (ligar a assinatura do PJe ao token, não só o diagnóstico) e, depois, outros modelos e certificados em nuvem.
 
 ## Créditos
 

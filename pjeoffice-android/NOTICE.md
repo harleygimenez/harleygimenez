@@ -5,7 +5,9 @@ Este projeto não copia código-fonte do PJeOffice Pro. Partes do protocolo e al
 - Certificado público "PJe" do CNJ (`PJeOffice.cer`), embutido em `core/.../CodigoSeguranca.kt`, e as imagens de resposta (GIF 1×1 e PNG 2×1) de `PjeWebTaskResponse`, ambos de **signer4j-pje** — https://github.com/tomvieira/signer4j-pje
 - Nomes de tarefas, campos e regras de verificação conferidos em **signer4j-pje**, **signer4j** (https://github.com/l3onardo-oliv3ira/signer4j) e **utils4j** (https://github.com/l3onardo-oliv3ira/utils4j).
 
-Licença desses projetos:
+- **Protocolo do token G&D StarSign CUT S** (handshake do applet SafeSign, canal lógico, VERIFY PIN, MSE SET, PSO COMPUTE DIGITAL SIGNATURE e os endereços dos arquivos PKCS#15), em `core/.../token/StarSign.kt`, conferido em **starsign-driver** (licença LGPL-2.1), que documenta APDUs reais capturados do SafeSign 4.7 — https://github.com/DiegoRibeirodeSouza/starsign-driver. Este projeto reimplementa o protocolo em Kotlin; não copia o código C do driver. A string do handshake é um dado de interoperabilidade do applet, não um segredo.
+
+O starsign-driver está sob LGPL-2.1 (ver o repositório). Os projetos signer4j estão sob a licença MIT:
 
 ```
 MIT License

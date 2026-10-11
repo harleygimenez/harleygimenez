@@ -57,6 +57,13 @@ class MainActivity : Activity() {
         botaoDesbloquear = Ui.botao(this, "Desbloquear") { alternarBloqueio() }.also { cert.addView(it) }
         cert.addView(Ui.botao(this, "Remover certificado do app") { confirmarRemocao() })
 
+        // Token A3
+        val token = Ui.cartao(this).also { raiz.addView(it) }
+        token.addView(Ui.titulo(this, "Token A3 (StarSign CUT S)"))
+        token.addView(Ui.texto(this, "Suporte em testes para o token G&D StarSign CUT S por USB OTG. " +
+            "Faça o diagnóstico antes de usar no PJe.", Ui.CINZA, 13f))
+        token.addView(Ui.botao(this, "Diagnóstico do token") { startActivity(Intent(this, TokenActivity::class.java)) })
+
         // PJe
         val pje = Ui.cartao(this).also { raiz.addView(it) }
         pje.addView(Ui.titulo(this, "Acessar o PJe"))
