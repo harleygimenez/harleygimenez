@@ -47,6 +47,10 @@ O site do PJe conversa com o assinador chamando `http://127.0.0.1:8800/pjeOffice
 
 Quando chega uma tarefa não suportada, ela fica no **Registro** da tela inicial. *Copiar detalhes* copia o pedido (sem os cookies de sessão) para você reportar.
 
+### Cadeia de certificados (AC-OAB e ICP-Brasil)
+
+O PJe espera a cadeia do certificado (folha + ACs + raiz). Quando o certificado traz só a folha, o app **completa a cadeia pela rede**: cada certificado ICP-Brasil aponta, no campo AIA, a URL do certificado do emissor no repositório do ITI, então o app segue essas URLs e monta a cadeia inteira (folha → AC-OAB de 2º nível → CAs acima → raiz) sozinho, sem precisar embutir certificados no app. Para o token A3, que já devolve a cadeia completa, nada é baixado. Os certificados baixados ficam em cache na memória.
+
 ### Segurança
 
 - Cada pedido mostra um diálogo com o servidor, a tarefa e o certificado; nada é assinado sem você tocar em **Assinar**.

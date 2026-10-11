@@ -13,6 +13,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         Notificacoes.criarCanais(this)
+        // Completa a cadeia de certificados (AC-OAB, CAs, raiz) pelo campo AIA.
+        BuscadorCadeia.instalar()
     }
 }
 

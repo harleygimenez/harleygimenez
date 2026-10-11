@@ -26,9 +26,14 @@ interface Assinante : AutoCloseable {
     /** Assina um resumo já calculado (o PJe envia o hash do documento). */
     fun assinarResumo(resumo: String, hash: ByteArray): ByteArray
 
-    /** Cadeia no formato PkiPath (ASN.1 DER), em Base64 — o formato que o PJe espera. */
+    /**
+     * Cadeia no formato PkiPath (ASN.1 DER), em Base64 — o formato que o PJe
+     * espera. Completa a cadeia pelo AIA (ver [CompletadorCadeia]) quando o
+     * certificado trouxer só a folha, para incluir a AC-OAB e as CAs acima.
+     */
     fun cadeiaPkiPathBase64(): String {
-        val caminho = CertificateFactory.getInstance("X.509").generateCertPath(cadeia)
+        val completa = CompletadorCadeia.completar(cadeia)
+        val caminho = CertificateFactory.getInstance("X.509").generateCertPath(completa)
         return Base64.getEncoder().encodeToString(caminho.getEncoded("PkiPath"))
     }
 
