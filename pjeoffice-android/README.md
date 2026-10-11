@@ -6,6 +6,18 @@ App Android (APK) que faz no celular o papel do **PJeOffice Pro**: assina com o 
 
 > **Status:** ✅ login por certificado funcionando no PJe real com token A3 StarSign (Android, qualquer aparelho ARM). O APK é universal (Kotlin puro, sem bibliotecas nativas nem restrição de ABI), então roda em arm64‑v8a, armeabi‑v7a e x86. Um alvo **Linux** (desktop/mini‑PC) é viável reusando o módulo `core` — veja [Próximos passos](#próximos-passos).
 
+### Onde já foi testado (login com token A3 StarSign por USB OTG)
+
+| Sistema | Instância | Login | Observação |
+| --- | --- | --- | --- |
+| **TJRJ** | 2º grau | ✅ | `cnj.autenticador` (clássico, MD5withRSA) |
+| **TJRO** | 1º grau | ✅ | |
+| **TJ** (PJe) | — | ✅ | |
+| **CNJ — Corregedoria** | — | ✅ | |
+| **PJe SSO** (`sso.cloud.pje.jus.br`) | — | ✅ | `sso.autenticador` (SHA256withRSA) |
+
+> Onde um tribunal recusa com "Não foi possível validar o certificado", costuma ser **cadastro/primeiro acesso do certificado naquele sistema** (lado do servidor), não o app — a assinatura é válida e a cadeia está completa (confirme pelo *Diagnóstico do token*: `✔ Assinatura CONFERE`).
+
 ## Por que não dá para "instalar o PJeOffice Pro" no Android
 
 O pacote do PJeOffice Pro para Linux (`pjeoffice-pro.sh`, `pjeoffice-pro.jar`, pasta `jre/` com o Java da Azul Zulu e `ffmpeg.exe`) é um programa de **computador**:
