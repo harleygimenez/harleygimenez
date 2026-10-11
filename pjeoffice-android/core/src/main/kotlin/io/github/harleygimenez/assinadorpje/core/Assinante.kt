@@ -53,17 +53,23 @@ class AssinanteJca(
         val resumo = Algoritmos.resumoDe(algoritmo)
         // "ASN1MD5withRSA" & cia.: `dados` já é o resumo (o PJe manda o hash do documento).
         if (Algoritmos.resumoPronto(algoritmo)) return assinarResumo(resumo, dados)
-        try {
+        val erroJca = try {
             return Signature.getInstance(Algoritmos.nomeJca(algoritmo)).run {
                 initSign(chave)
                 update(dados)
                 sign()
             }
         } catch (e: Exception) {
-            // Cai para o caminho manual (resumo + RSA cru).
+            e
         }
-        val hash = MessageDigest.getInstance(resumo).digest(dados)
-        return assinarResumo(resumo, hash)
+        // Caminho manual (resumo + RSA cru com NONEwithRSA). Serve para chaves de
+        // arquivo .pfx; chaves do Android Keystore não aceitam RSA cru, então se
+        // também falhar, devolvemos o erro original (mais claro que o do raw).
+        return try {
+            assinarResumo(resumo, MessageDigest.getInstance(resumo).digest(dados))
+        } catch (e: Exception) {
+            throw erroJca
+        }
     }
 
     override fun assinarResumo(resumo: String, hash: ByteArray): ByteArray =

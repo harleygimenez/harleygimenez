@@ -114,7 +114,10 @@ object TarefaSsoAutenticador : Tarefa {
         val enviarPara = t.exigir("enviarPara")
         val mensagem = t.exigir("mensagem")
         val token = t.exigir("token")
-        val algoritmo = t.texto("algoritmoAssinatura") ?: "MD5withRSA"
+        // Padrão do login no SSO: SHA256withRSA (o cliente oficial do PJe usa
+        // esse), aceito por token A3 e por certificado do Android — ao
+        // contrário de MD5, que esses não assinam.
+        val algoritmo = t.texto("algoritmoAssinatura") ?: "SHA256withRSA"
         val assinatura = ctx.assinante.assinar(algoritmo, mensagem.toByteArray(Charsets.UTF_8))
         val resposta = ctx.postJson(
             enviarPara,

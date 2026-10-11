@@ -212,6 +212,17 @@ class ProcessadorTest {
     }
 
     @Test
+    fun `sso sem algoritmo informado usa SHA256withRSA`() {
+        val http = ClienteHttpFalso()
+        // Requisição SSO sem o campo algoritmoAssinatura.
+        val tarefa = Json.escrever(mapOf("mensagem" to "abc", "enviarPara" to "/api/login", "token" to "u1"))
+        val r = processador(http).processar(requisicao("sso.autenticador", tarefa), ORIGEM)
+        assertTrue(r.sucesso, r.mensagem)
+        val corpo = Json.lerObjeto(http.envios.single().corpo)
+        verificaAssinatura("SHA256withRSA", "abc".toByteArray(), corpo["assinatura"] as String)
+    }
+
+    @Test
     fun `cnj autenticador usa MD5withRSA e formulário`() {
         val http = ClienteHttpFalso()
         val tarefa = Json.escrever(mapOf("mensagem" to "abc", "enviarPara" to "/logar.seam"))
