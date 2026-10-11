@@ -2,7 +2,9 @@
 
 App Android (APK) que faz no celular o papel do **PJeOffice Pro**: assina com o seu certificado digital ICP-Brasil os pedidos do **PJe** (login com certificado e assinatura de documentos).
 
-> Projeto independente, sem vínculo com o CNJ nem com tribunais. **Ainda não foi testado contra um PJe real.** Use primeiro em situações sem prazo e confira no PJe se o login ou a assinatura deram certo.
+> Projeto independente, sem vínculo com o CNJ nem com tribunais. **Login no PJe com token A3 (G&D StarSign CUT S) por USB OTG já foi validado contra o PJe real** (SSO e login clássico). Mesmo assim, use primeiro em situações sem prazo e confira no PJe se o login ou a assinatura deram certo.
+
+> **Status:** ✅ login por certificado funcionando no PJe real com token A3 StarSign (Android, qualquer aparelho ARM). O APK é universal (Kotlin puro, sem bibliotecas nativas nem restrição de ABI), então roda em arm64‑v8a, armeabi‑v7a e x86. Um alvo **Linux** (desktop/mini‑PC) é viável reusando o módulo `core` — veja [Próximos passos](#próximos-passos).
 
 ## Por que não dá para "instalar o PJeOffice Pro" no Android
 
@@ -27,11 +29,30 @@ O site do PJe conversa com o assinador chamando `http://127.0.0.1:8800/pjeOffice
 
 - **A1 (arquivo `.pfx`/`.p12`):** use *Importar certificado A1*. O arquivo é copiado para a área privada do app e continua protegido pela senha dele. A senha **não é gravada**: fica só na memória até você tocar em *Bloquear* ou o Android fechar o app.
 - **Certificado instalado no Android** (Configurações › Segurança › Criptografia e credenciais › Instalar certificado): use *Usar certificado instalado no Android*. A chave privada fica no armazenamento do sistema.
-- **A3 (token USB) — G&D StarSign CUT S:** suporte **em testes**, por USB OTG, sem precisar de driver do sistema. O app fala direto com o leitor (CCID) e com o applet SafeSign do token. Faça primeiro o **Diagnóstico do token** na tela inicial: ele conecta e lê os dados *sem enviar o PIN*, e só faz a assinatura de teste se você mandar. Outros modelos de token e certificados em nuvem (BirdID, SafeID, VIDaaS…) ainda não.
+- **A3 (token USB) — G&D StarSign CUT S:** ✅ **funcionando** (login validado no PJe real), por USB OTG, **sem precisar de driver do sistema**. O app fala direto com o leitor (CCID) e com o applet SafeSign do token. Faça primeiro o **Diagnóstico do token** na tela inicial: ele conecta e lê os dados *sem enviar o PIN*, e, se você mandar, faz uma assinatura de teste e confere a assinatura contra a chave pública do seu certificado (`✔ Assinatura CONFERE`). O passo a passo técnico está em [Como o token A3 funciona por dentro](#como-o-token-a3-funciona-por-dentro). Outros modelos de token e certificados em nuvem (BirdID, SafeID, VIDaaS…) ainda não.
 
 > **Cuidado com o PIN do token.** Esses tokens bloqueiam após poucas tentativas de PIN erradas. O app lê o contador de tentativas antes e aborta sozinho se restarem poucas, mas confira o número mostrado antes de digitar o PIN.
 
 **Usar o token no login/assinatura do PJe:** em *Diagnóstico do token*, toque em **Usar este token para assinar no PJe** (lê o certificado sem PIN e define o token como certificado ativo). Depois abra o PJe pelo navegador do app: quando o PJe pedir a assinatura, o app abre o token e pede o PIN na hora. O token só funciona pelo **navegador do app** (em primeiro plano, por causa da permissão de USB); pelo Chrome ainda não.
+
+### Como o token A3 funciona por dentro
+
+O token **G&D StarSign CUT S** é um leitor **CCID** com o applet **SafeSign** (A.E.T. Europe) e um sistema de arquivos **PKCS#15**. O app conversa com ele em APDUs ISO 7816‑4, sem driver do sistema. A sequência completa (toda no código em `core/.../token/`):
+
+1. **Enquadramento CCID** (`Ccid.kt`): os APDUs são embrulhados em mensagens CCID (nível APDU curto, `dwMaxCCIDMessageLength = 271`) e enviados pela API de **USB Host** do Android.
+2. **Handshake "DRM"** (`StarSign.abrir`): o applet só libera as operações depois de receber, via `PUT DATA`, a string exata `I am A.E.T. Europe B.V. SafeSign or BlueX approved software.`. Em seguida seleciona o AID PKCS#15 (`A0 00 00 00 63 "PKCS-15"`), abre o **canal lógico 1** (`MANAGE CHANNEL`) e reseleciona o AID nesse canal.
+3. **Descoberta PKCS#15:** lê o **ODF** (EF `5031`), que aponta os diretórios: `A0`→PrKDF (`4400`, chaves privadas), `A4`→CDF (`4404`, certificados). Do **CDF** extrai os caminhos de todos os certificados (OCTET STRINGs começando em `3F00`/`3FFF`), que neste token ficam no **DF `4302`**, e lê cada um.
+4. **Escolha da folha:** o token pode guardar certificados de **cadeias diferentes** (ex.: CAs da RFB ao lado do certificado da OAB). A folha do titular é escolhida como o certificado **não‑CA** (`basicConstraints == -1`), evitando pegar o topo de uma sub‑cadeia de CAs.
+5. **Referência da chave:** o `MSE SET` precisa da `keyReference` real. Em vez de fixar `01` (que dava `6A88` – "dado de referência não encontrado"), o app lê o **PrKDF** (`4400`) e extrai o `keyReference` de verdade (neste token, `00`). O PrKDF é legível **sem PIN**, então isso é feito no `abrir()`.
+6. **PIN + reautenticação:** o `VERIFY PIN` usa referência `0x02` (ASCII + preenchimento com `0x00` até 15 bytes). **Particularidade do SafeSign:** cada `SELECT AID` *reseta* a autenticação do PIN. Como ler a cadeia faz vários `SELECT AID`, o app **reenvia o PIN imediatamente antes do `MSE SET`**, sem nenhum `SELECT AID` no meio — isso resolveu o `6982` ("condição de segurança não satisfeita").
+7. **Assinatura:** o cartão faz o padding **PKCS#1 v1.5** e a exponenciação RSA, mas **não** monta o `DigestInfo` — então o app monta o `DigestInfo` do algoritmo pedido e envia via `PSO: COMPUTE DIGITAL SIGNATURE` (`00 2A 9E 9A`). Assim o mesmo cartão assina **SHA256withRSA** (login SSO do PJe) **e MD5withRSA** (login clássico `cnj.autenticador`, ex.: TJRJ).
+8. **Cadeia enviada ao PJe:** a cadeia é completada (folha → emissoras → raiz) e enviada como **PkiPath** Base64 no campo `certChain`. As CAs vêm do próprio token, de CAs embutidas em `app/src/main/assets/cadeia-icp/` (AC‑OAB G3/G4 e a cadeia RFB) ou, em último caso, baixadas pelo campo **AIA**.
+
+> **PIN guardado:** após o `VERIFY`, o PIN fica em memória **só durante a sessão do token**, para a reautenticação do passo 6, e é zerado em `fechar()`. Nada é persistido.
+
+Uma particularidade do login **clássico** (`cnj.autenticador`): o servidor autentica a sessão e responde **HTTP 302** (redirect para a área logada) — que é o caminho de **sucesso**. O cliente HTTP do app **segue o redirect** carregando os cookies, como o navegador faria.
+
+> Se o PJe recusar com **"Não foi possível validar o certificado"** mesmo com `✔ Assinatura CONFERE` no diagnóstico, o problema é de **cadastro/primeiro acesso do certificado no tribunal** (lado do servidor), não do app: a assinatura é criptograficamente válida e a cadeia está completa.
 
 ### Tarefas do PJe suportadas
 
@@ -95,7 +116,9 @@ Gerar um keystore: `keytool -genkeypair -v -keystore assinador.jks -alias assina
 
 ### Próximos passos
 
-- Testar login e assinatura em PJe reais (TRF, TRT, TJ) e ajustar o que aparecer no Registro.
+- ✅ Login com token A3 StarSign no PJe real (SSO e clássico) — **feito**.
+- Testar assinatura de documentos (`cnj.assinadorHash`/`assinadorBase64`) no fluxo real e ajustar o que aparecer no Registro.
+- **Alvo Linux (desktop/mini‑PC, ARM ou x86):** o módulo `core` é Kotlin/JVM puro e já traz o servidor local do PjeOffice, a lógica do token, a cadeia e o cliente HTTP. Para o Linux bastaria um pequeno daemon JVM que suba o `ServidorLocal` e um `Transporte` sobre **PC/SC (`pcscd` via `javax.smartcardio`)** — o navegador no Linux conversa com `127.0.0.1:8800` igual ao Android.
 - `cnj.assinador` (assinatura CMS/PAdES de arquivos) com BouncyCastle.
 - Token A3 StarSign CUT S pelo Chrome (hoje só pelo navegador do app) e, depois, outros modelos de token e certificados em nuvem.
 
