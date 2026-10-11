@@ -188,6 +188,9 @@ class TokenActivity : Activity() {
                 escrever("  [$i] ${Certificados.descrever(c).replace("\n", " — ")}")
             }
 
+            escrever("\nEstrutura PKCS#15 (para localizar os certificados):")
+            escrever(runCatching { token.explorarPkcs15() }.getOrElse { "  (falha ao varrer: ${it.message})" })
+
             if (!assinarTeste) {
                 escrever("\n✔ Diagnóstico concluído (sem enviar PIN).")
                 return
@@ -203,7 +206,9 @@ class TokenActivity : Activity() {
             escrever("\nVerificando PIN…")
             token.verificarPin(pin)
             escrever("✔ PIN aceito.")
-            val cadeiaPos = if (cadeia.isNotEmpty()) cadeia else token.lerCadeia()
+            escrever("\nEstrutura PKCS#15 após o PIN:")
+            escrever(runCatching { token.explorarPkcs15() }.getOrElse { "  (falha ao varrer: ${it.message})" })
+            val cadeiaPos = if (cadeia.isNotEmpty()) cadeia else runCatching { token.lerCadeia() }.getOrDefault(emptyList())
             if (cadeiaPos.isEmpty()) { escrever("✖ Não foi possível ler o certificado após o PIN."); return }
             val assinante = AssinanteStarSign(token, cadeiaPos)
             val dados = "teste de assinatura assinador-pje ${System.currentTimeMillis()}".toByteArray()

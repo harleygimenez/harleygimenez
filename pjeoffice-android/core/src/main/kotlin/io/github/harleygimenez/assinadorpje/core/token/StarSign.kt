@@ -103,6 +103,46 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
 
     fun fechar() = runCatching { transporte.close() }
 
+    /**
+     * Varre a estrutura PKCS#15 e devolve um dump (fid, tamanho, início em hex)
+     * dos diretórios/arquivos, para descobrir onde estão os certificados neste
+     * token (os IDs variam por emissão). Diagnóstico — não altera nada.
+     */
+    fun explorarPkcs15(): String {
+        val sb = StringBuilder()
+        val candidatos = listOf(
+            "5031", "5032", "5033", "6050",
+            "4401", "4402", "4403", "4404", "4405", "4406", "4407", "4408", "4409",
+            "4301", "4302", "4303", "4304", "4305", "4306",
+        )
+        for (c in candidatos) {
+            // Volta para a raiz da aplicação antes de cada arquivo.
+            env(0, 0xA4, 0x04, 0x00, AID, le = 256)
+            val sel = env(0, 0xA4, 0x00, 0x0C, Hex.bytes(c))
+            if (!sel.ok) {
+                sb.append("$c: ${Hex.sw(sel.sw)}\n")
+                continue
+            }
+            val dados = lerBinarioAtual(260)
+            sb.append(if (dados.isEmpty()) "$c: ok (DF ou vazio)\n" else "$c (${dados.size}B): ${Hex.de(dados, 140)}\n")
+        }
+        return sb.toString()
+    }
+
+    private fun lerBinarioAtual(max: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        var off = 0
+        while (off < max) {
+            val n = minOf(0xFE, max - off)
+            val r = env(0, 0xB0, (off ushr 8) and 0x7F, off and 0xFF, le = n)
+            if (!r.ok || r.dados.isEmpty()) break
+            out.write(r.dados)
+            off += r.dados.size
+            if (r.dados.size < n) break
+        }
+        return out.toByteArray()
+    }
+
     private fun lerArquivo(caminho: String): ByteArray {
         selecionarCaminho(caminho)
         val saida = java.io.ByteArrayOutputStream()
