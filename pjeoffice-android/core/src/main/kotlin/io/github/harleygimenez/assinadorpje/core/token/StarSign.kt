@@ -26,6 +26,13 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
     @Volatile private var chavesDescobertas = false
     /** Referência de chave que funcionou na última assinatura (diagnóstico). */
     @Volatile private var chaveRefUsada: Int = -1
+    /**
+     * PIN já preenchido (ASCII + 0x00 até 15 bytes), guardado após o VERIFY para
+     * reautenticar logo antes de assinar. No SafeSign, o SELECT AID das leituras
+     * (cadeia, PrKDF) reseta a autenticação do PIN, então reenviá-lo imediatamente
+     * antes do MSE SET é o que mantém a assinatura válida.
+     */
+    @Volatile private var pinMemoria: ByteArray? = null
 
     private fun env(cla: Int, ins: Int, p1: Int, p2: Int, dados: ByteArray? = null, le: Int? = null): RespostaApdu {
         val apdu = Apdu.montar(cla or canal, ins, p1, p2, dados, le)
@@ -57,6 +64,10 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
         }
         // 5. SELECT AID no canal 1.
         env(0, 0xA4, 0x04, 0x00, AID, le = 256)
+        // 6. Descobre a referência da chave agora (antes do PIN): o PrKDF é
+        //    legível sem PIN, e assim a assinatura não precisa fazer SELECT AID
+        //    depois do PIN (o que resetaria a autenticação no SafeSign).
+        runCatching { refsDeAssinatura() }
     }
 
     /** Tentativas de PIN restantes sem gastar nenhuma. -1 = já autenticado, 0 = bloqueado. */
@@ -77,13 +88,21 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
         val campo = ByteArray(PIN_MAX)
         ascii.copyInto(campo)
         val r = env(0, 0x20, 0x00, PIN_REF, campo)
+        if (r.ok) pinMemoria = campo.copyOf() // guarda para reautenticar antes de assinar
         campo.fill(0)
+        ascii.fill(0)
         when {
             r.ok -> Unit
             r.sw1 == 0x63 -> throw ErroToken("PIN incorreto. Restam ${r.sw2 and 0x0F} tentativa(s).", r.sw)
             r.sw == 0x6983 -> throw ErroToken("PIN bloqueado. Desbloqueie com o gerenciador do token.", r.sw)
             else -> r.exigirOk("verificar o PIN")
         }
+    }
+
+    /** Reenvia o PIN já verificado (reautentica). No-op se nenhum PIN foi guardado. */
+    private fun reautenticar() {
+        val campo = pinMemoria ?: return
+        env(0, 0x20, 0x00, PIN_REF, campo)
     }
 
     /** Lê a cadeia de certificados (folha primeiro). Ignora slots vazios. */
@@ -191,7 +210,8 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
     fun assinarSha256(dados: ByteArray): ByteArray {
         val hash = java.security.MessageDigest.getInstance("SHA-256").digest(dados)
         val digestInfo = Algoritmos.digestInfo("SHA-256", hash)
-        val refs = refsDeAssinatura()
+        val refs = refsDeAssinatura() // já descoberto no abrir(); não faz SELECT AID aqui
+        reautenticar() // reenvia o PIN imediatamente antes do MSE SET (sem SELECT AID no meio)
         var erro: RespostaApdu? = null
         for (ref in refs) {
             val mse = byteArrayOf(0x84.toByte(), 0x01, ref.toByte(), 0x80.toByte(), 0x01, 0x02)
@@ -260,7 +280,11 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
         return refs.distinct()
     }
 
-    fun fechar() = runCatching { transporte.close() }
+    fun fechar() {
+        pinMemoria?.fill(0)
+        pinMemoria = null
+        runCatching { transporte.close() }
+    }
 
     /**
      * Varre a estrutura PKCS#15 e devolve um dump (fid, tamanho, início em hex)

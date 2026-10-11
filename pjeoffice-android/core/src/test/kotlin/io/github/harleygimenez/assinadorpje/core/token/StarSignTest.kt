@@ -52,7 +52,10 @@ class CartaoSimulado(
         return when (ins) {
             0xDA -> if (!appletAtivo) sw(0x6D00) else sw(0x9000) // PUT DATA (handshake)
             0xA4 -> when (p1) {
-                0x04 -> { appletAtivo = true; efSelecionado = null; resp("desafio".toByteArray(), 0x9000) } // SELECT AID
+                0x04 -> { // SELECT AID: ativa o applet e RESETA a autenticação (como o SafeSign real)
+                    appletAtivo = true; efSelecionado = null; autenticado = false; mseFeito = false
+                    resp("desafio".toByteArray(), 0x9000)
+                }
                 0x02 -> { // SELECT EF filho (certificado)
                     val fid = Hex.de(dados).replace(" ", "")
                     if (fid == "2F01") { efSelecionado = fid; sw(0x9000) } else sw(0x6A82)
@@ -190,6 +193,22 @@ class StarSignTest {
         s.assinarSha256("x".toByteArray())
         assertEquals(0x45, c.refMseAceita)
         assertEquals("45", s.chaveRefUsadaHex())
+    }
+
+    @Test
+    fun `reautentica o PIN antes de assinar quando o SELECT AID o resetou`() {
+        // Fluxo real: após o PIN, ler a cadeia faz SELECT AID (que reseta a
+        // autenticação no SafeSign). A assinatura deve reenviar o PIN e funcionar.
+        val c = cartao()
+        val s = StarSign(c).apply { abrir(); verificarPin("1234".toCharArray()) }
+        s.lerCadeia() // faz SELECT AID → reseta o PIN no cartão simulado
+        assertTrue(!c.autenticado, "o SELECT AID da leitura deve ter derrubado o PIN")
+        val assinatura = s.assinarSha256("login no PJe".toByteArray())
+        assertEquals(256, assinatura.size)
+        val ok = Signature.getInstance("SHA256withRSA").run {
+            initVerify(par.public); update("login no PJe".toByteArray()); verify(assinatura)
+        }
+        assertTrue(ok, "após reautenticar, a assinatura deve conferir")
     }
 
     @Test
