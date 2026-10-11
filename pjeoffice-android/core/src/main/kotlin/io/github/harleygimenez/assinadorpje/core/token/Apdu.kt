@@ -88,7 +88,7 @@ class LogApdu {
     @Synchronized
     fun add(linha: String) {
         linhas += linha
-        if (linhas.size > 600) linhas.removeAt(0)
+        if (linhas.size > 2000) linhas.removeAt(0)
     }
 
     @Synchronized

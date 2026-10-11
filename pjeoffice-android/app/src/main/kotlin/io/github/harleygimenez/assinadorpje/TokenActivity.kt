@@ -85,6 +85,7 @@ class TokenActivity : Activity() {
     }
 
     private fun escrever(linha: String) {
+        log.add(linha) // também vai para o "log técnico" copiável (inclui as conclusões ✔/✖/➜)
         runOnUiThread { saida.append(linha + "\n") }
     }
 
