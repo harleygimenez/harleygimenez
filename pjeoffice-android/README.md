@@ -130,7 +130,8 @@ Gerar um keystore: `keytool -genkeypair -v -keystore assinador.jks -alias assina
 
 - ✅ Login com token A3 StarSign no PJe real (SSO e clássico) — **feito**.
 - Testar assinatura de documentos (`cnj.assinadorHash`/`assinadorBase64`) no fluxo real e ajustar o que aparecer no Registro.
-- **Alvo Linux (desktop/mini‑PC, ARM ou x86):** o módulo `core` é Kotlin/JVM puro e já traz o servidor local do PjeOffice, a lógica do token, a cadeia e o cliente HTTP. Para o Linux bastaria um pequeno daemon JVM que suba o `ServidorLocal` e um `Transporte` sobre **PC/SC (`pcscd` via `javax.smartcardio`)** — o navegador no Linux conversa com `127.0.0.1:8800` igual ao Android.
+- **Alvo Linux (desktop/mini‑PC, ARM ou x86):** o módulo `core` é Kotlin/JVM puro e já traz o servidor local do PjeOffice, a lógica do token, a cadeia e o cliente HTTP. Para o Linux bastaria um pequeno daemon JVM que suba o `ServidorLocal` e um `Transporte` sobre **PC/SC (`pcscd` via `javax.smartcardio`)** — o navegador no Linux conversa com `127.0.0.1:8800` igual ao Android. Para **suporte amplo a marcas de token** no Linux, o caminho é o **SunPKCS11** sobre as bibliotecas `.so` do fabricante — veja [docs/tokens-pkcs11.md](docs/tokens-pkcs11.md).
+- **Outras marcas de token / certificados em nuvem:** a estratégia (CCID direto por família no Android; PKCS#11 no Linux) está documentada em [docs/tokens-pkcs11.md](docs/tokens-pkcs11.md).
 - `cnj.assinador` (assinatura CMS/PAdES de arquivos) com BouncyCastle.
 - Token A3 StarSign CUT S pelo Chrome (hoje só pelo navegador do app) e, depois, outros modelos de token e certificados em nuvem.
 
