@@ -1,5 +1,7 @@
 # Causa — gestão jurídica no celular
 
+> Este repositório também tem um projeto separado: **[`pjeoffice-android/`](pjeoffice-android/README.md)**, um APK que faz no Android o papel do PJeOffice Pro (assinador do PJe).
+
 App de gestão para advogados e escritórios, em **React Native + Expo** (Android, iOS e web), inspirado nas funções de softwares jurídicos como o Astrea. É um projeto original: não usa marca, textos, imagens nem código de terceiros.
 
 Nesta primeira versão os dados ficam **salvos no próprio aparelho** (sem servidor). Na primeira abertura o app carrega dados de exemplo; em **Ajustes** dá para restaurá-los ou começar do zero.
