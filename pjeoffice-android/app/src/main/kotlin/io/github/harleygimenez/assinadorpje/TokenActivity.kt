@@ -18,6 +18,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import io.github.harleygimenez.assinadorpje.core.CompletadorCadeia
 import io.github.harleygimenez.assinadorpje.core.token.AssinanteStarSign
 import io.github.harleygimenez.assinadorpje.core.token.ErroToken
 import io.github.harleygimenez.assinadorpje.core.token.Hex
@@ -189,6 +190,15 @@ class TokenActivity : Activity() {
             if (cadeia.isEmpty()) escrever("  Nenhum certificado lido sem PIN (normal em alguns tokens).")
             cadeia.forEachIndexed { i, c ->
                 escrever("  [$i] ${Certificados.descrever(c).replace("\n", " — ")}")
+            }
+            if (cadeia.isNotEmpty()) {
+                val completa = runCatching { CompletadorCadeia.completar(cadeia) }.getOrDefault(cadeia)
+                if (completa.size > cadeia.size) {
+                    escrever("  Cadeia completada (será enviada ao PJe):")
+                    completa.forEachIndexed { i, c ->
+                        escrever("    [$i] ${Certificados.descrever(c).replace("\n", " — ")}")
+                    }
+                }
             }
 
             runCatching { token.refsDeChaveHex() }.getOrNull()?.let { refs ->

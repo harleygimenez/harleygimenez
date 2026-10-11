@@ -1,6 +1,7 @@
 package io.github.harleygimenez.assinadorpje.core.token
 
 import io.github.harleygimenez.assinadorpje.core.Algoritmos
+import io.github.harleygimenez.assinadorpje.core.ParCaFolha
 import java.math.BigInteger
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -222,6 +223,17 @@ class StarSignTest {
         val cadeia = s.lerCadeia()
         assertEquals(1, cadeia.size) // só o leaf tem conteúdo no simulado
         assertContentEquals(cert, cadeia.first().encoded)
+    }
+
+    @Test
+    fun `ordena a folha nao-CA primeiro, ignorando CA orfa de outra cadeia`() {
+        // Simula o token real: uma CA órfã (de outra cadeia, ex.: RFB) + a CA do
+        // titular + a folha, embaralhadas. A folha (não-CA) deve vir primeiro, e a
+        // CA órfã não deve virar "folha".
+        val entrada = listOf(ParCaFolha.caOrfa, ParCaFolha.ca, ParCaFolha.folha)
+        val ordenada = StarSign.ordenarCadeia(entrada)
+        assertEquals(ParCaFolha.folha, ordenada.first(), "a folha do titular (não-CA) deve ser a primeira")
+        assertEquals(listOf(ParCaFolha.folha, ParCaFolha.ca), ordenada, "só a cadeia do titular, folha→CA emissora")
     }
 
     @Test

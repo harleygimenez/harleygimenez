@@ -16,6 +16,8 @@ object ParCaFolha {
     private const val SENHA = "senha-teste"
     val ca: X509Certificate
     val folha: X509Certificate
+    /** CA independente (auto-assinada), que não emite a folha — simula uma CA "órfã" no token. */
+    val caOrfa: X509Certificate
 
     init {
         val dir = Files.createTempDirectory("cadeia-teste").toFile()
@@ -29,6 +31,8 @@ object ParCaFolha {
         val base = arrayOf("-storetype", "PKCS12", "-keystore", ks, "-storepass", SENHA, "-keypass", SENHA)
         run("-genkeypair", "-alias", "ca", "-dname", "CN=AC Teste, O=ICP-Brasil, C=BR",
             "-keyalg", "RSA", "-keysize", "2048", "-validity", "3", "-ext", "bc:c", *base)
+        run("-genkeypair", "-alias", "caorfa", "-dname", "CN=AC Orfa, O=ICP-Brasil, C=BR",
+            "-keyalg", "RSA", "-keysize", "2048", "-validity", "3", "-ext", "bc:c", *base)
         run("-genkeypair", "-alias", "leaf", "-dname", "CN=Fulano:12345678900, O=ICP-Brasil, C=BR",
             "-keyalg", "RSA", "-keysize", "2048", "-validity", "3", *base)
         val csr = File(dir, "leaf.csr").path
@@ -38,6 +42,7 @@ object ParCaFolha {
 
         val store = KeyStore.getInstance("PKCS12").apply { File(ks).inputStream().use { load(it, SENHA.toCharArray()) } }
         ca = store.getCertificate("ca") as X509Certificate
+        caOrfa = store.getCertificate("caorfa") as X509Certificate
         folha = CertificateFactory.getInstance("X.509")
             .generateCertificate(File(cer).inputStream()) as X509Certificate
     }

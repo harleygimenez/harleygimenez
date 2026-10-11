@@ -177,20 +177,7 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
     }
 
     /** Ordena a cadeia com a folha primeiro, subindo pelos emissores. */
-    private fun ordenarCadeia(certs: List<X509Certificate>): List<X509Certificate> {
-        if (certs.size <= 1) return certs
-        val folha = certs.firstOrNull { c ->
-            certs.none { o -> o !== c && o.issuerX500Principal == c.subjectX500Principal }
-        } ?: certs.first()
-        val ordenada = mutableListOf(folha)
-        var atual = folha
-        while (true) {
-            val emissor = certs.firstOrNull { it !in ordenada && it.subjectX500Principal == atual.issuerX500Principal } ?: break
-            ordenada += emissor
-            atual = emissor
-        }
-        return ordenada
-    }
+    private fun ordenarCadeia(certs: List<X509Certificate>): List<X509Certificate> = Companion.ordenarCadeia(certs)
 
     /**
      * Assina [dados] com SHA-256 + RSA. Monta o DigestInfo aqui (o cartão não o
@@ -330,6 +317,33 @@ class StarSign(private val transporte: Transporte, private val log: LogApdu? = n
         const val PIN_MAX = 15
 
         const val ATR_CONHECIDO = "3B F9 96 00 00 81 31 FE 45 53 43 45 37 20 0E 00 20 20 28"
+
+        /**
+         * Ordena a cadeia com a folha (certificado do titular) primeiro,
+         * subindo pelos emissores. A folha é um certificado NÃO-CA
+         * (basicConstraints == -1) que não emite nenhum outro da lista — o
+         * token pode guardar CAs de uma cadeia diferente da do titular (ex.:
+         * CAs da RFB ao lado de um certificado da OAB), e sem o critério
+         * "não-CA" pegaríamos o topo dessa sub-cadeia de CAs como folha,
+         * descartando o certificado do titular.
+         */
+        internal fun ordenarCadeia(certs: List<X509Certificate>): List<X509Certificate> {
+            if (certs.size <= 1) return certs
+            fun naoEmiteOutro(c: X509Certificate) =
+                certs.none { o -> o !== c && o.issuerX500Principal == c.subjectX500Principal }
+            val folha = certs.firstOrNull { it.basicConstraints == -1 && naoEmiteOutro(it) }
+                ?: certs.firstOrNull { it.basicConstraints == -1 }
+                ?: certs.firstOrNull { naoEmiteOutro(it) }
+                ?: certs.first()
+            val ordenada = mutableListOf(folha)
+            var atual = folha
+            while (true) {
+                val emissor = certs.firstOrNull { it !in ordenada && it.subjectX500Principal == atual.issuerX500Principal } ?: break
+                ordenada += emissor
+                atual = emissor
+            }
+            return ordenada
+        }
     }
 }
 
