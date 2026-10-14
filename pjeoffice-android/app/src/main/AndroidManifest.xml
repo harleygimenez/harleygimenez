@@ -4,6 +4,11 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Algumas páginas do PJe pedem a geolocalização do navegador
+         (navigator.geolocation), como no PJeOffice do Windows. Só pedimos a
+         permissão em tempo de execução quando a página de fato solicitar. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

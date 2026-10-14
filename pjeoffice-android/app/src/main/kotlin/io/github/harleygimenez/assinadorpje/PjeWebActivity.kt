@@ -15,6 +15,7 @@ import android.os.Environment
 import android.view.Menu
 import android.view.MenuItem
 import android.webkit.CookieManager
+import android.webkit.GeolocationPermissions
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -49,6 +50,10 @@ class PjeWebActivity : Activity() {
     private var modoComputador = false
     private var agentePadrao: String = ""
 
+    /** Pedido de geolocalização da página aguardando a permissão do Android. */
+    private var origemLocalizacao: String? = null
+    private var callbackLocalizacao: GeolocationPermissions.Callback? = null
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +86,22 @@ class PjeWebActivity : Activity() {
         web.webChromeClient = object : WebChromeClient() {
             override fun onReceivedTitle(view: WebView, title: String?) {
                 this@PjeWebActivity.title = title ?: "PJe"
+            }
+
+            // A página do PJe pede a localização (navigator.geolocation), como no
+            // PJeOffice do Windows. Se já temos a permissão, liberamos na hora;
+            // senão, pedimos ao Android e respondemos em onRequestPermissionsResult.
+            override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) {
+                if (temPermissaoLocalizacao()) {
+                    callback.invoke(origin, true, false)
+                    return
+                }
+                origemLocalizacao = origin
+                callbackLocalizacao = callback
+                requestPermissions(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                    PEDIDO_LOCALIZACAO,
+                )
             }
 
             override fun onShowFileChooser(
@@ -212,6 +233,21 @@ class PjeWebActivity : Activity() {
         callbackArquivos = null
     }
 
+    private fun temPermissaoLocalizacao(): Boolean =
+        checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        if (requestCode == PEDIDO_LOCALIZACAO) {
+            val concedida = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+            callbackLocalizacao?.invoke(origemLocalizacao, concedida, false)
+            origemLocalizacao = null
+            callbackLocalizacao = null
+            return
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
     private fun baixar(url: String, userAgent: String, contentDisposition: String?, mimetype: String?) {
         if (!url.startsWith("http")) {
             Toast.makeText(this, "Este tipo de download não é suportado no navegador embutido", Toast.LENGTH_LONG).show()
@@ -304,6 +340,7 @@ class PjeWebActivity : Activity() {
     companion object {
         const val EXTRA_URL = "url"
         private const val PEDIDO_ARQUIVO = 10
+        private const val PEDIDO_LOCALIZACAO = 11
         private const val MENU_RECARREGAR = 1
         private const val MENU_COMPUTADOR = 2
         private const val MENU_INICIO = 3
