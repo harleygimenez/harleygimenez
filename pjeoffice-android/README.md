@@ -80,6 +80,24 @@ Uma particularidade do login **clássico** (`cnj.autenticador`): o servidor aute
 
 Quando chega uma tarefa não suportada, ela fica no **Registro** da tela inicial. *Copiar detalhes* copia o pedido (sem os cookies de sessão) para você reportar.
 
+### Algoritmo da assinatura no login (MD5withRSA x SHA256withRSA)
+
+A **página do PJe escolhe o algoritmo** pelo campo `algoritmoAssinatura` da tarefa.
+Quando a página **não envia** esse campo, o PjeOffice oficial usa **MD5withRSA** —
+conferido no código do cliente (`signer4j-pje`, `PjeAutenticatorTask.java`):
+
+```java
+params.getAlgoritmoAssinatura()
+      .orElse(SignatureAlgorithm.MD5withRSA.getName())   // padrão histórico
+```
+
+Este app segue a mesma regra: usa o `algoritmoAssinatura` da página quando ele
+vem, e **assume MD5withRSA** quando não vem (caso do SSO do **PDPJ/jus.br/SEEU**,
+cuja tarefa chega sem o campo). O login SSO (`sso.autenticador`) ainda faz um
+*two-check*: tenta MD5 e, se o servidor recusar, reenvia com SHA-256. O token A3
+e os certificados `.pfx` assinam MD5 (montamos o DigestInfo em software); o
+certificado do Android Keychain é a única exceção que não assina MD5.
+
 ### Cadeia de certificados (AC-OAB e ICP-Brasil)
 
 O PJe espera a cadeia do certificado (folha + ACs + raiz). Quando o certificado traz só a folha, o app **completa a cadeia pela rede**: cada certificado ICP-Brasil aponta, no campo AIA, a URL do certificado do emissor no repositório do ITI, então o app segue essas URLs e monta a cadeia inteira (folha → AC-OAB de 2º nível → CAs acima → raiz) sozinho, sem precisar embutir certificados no app. Para o token A3, que já devolve a cadeia completa, nada é baixado. Os certificados baixados ficam em cache na memória.
