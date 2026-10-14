@@ -224,22 +224,42 @@ class ProcessadorTest {
     }
 
     @Test
-    fun `sso tenta MD5 e faz fallback para SHA-256 quando o servidor recusa`() {
-        // Servidor recusa o 1º envio (MD5) e aceita o 2º (SHA-256).
+    fun `sso tenta MD5, SHA-1 e SHA-256 nessa ordem até o servidor aceitar`() {
+        // Servidor recusa MD5 e SHA-1 (JSON "success":false) e aceita o 3º (SHA-256).
         val envios = mutableListOf<ByteArray>()
         val http = object : ClienteHttp {
             override fun post(url: String, tipoConteudo: String, corpo: ByteArray, cabecalhos: Map<String, String>): RespostaHttp {
                 envios += corpo
-                return if (envios.size == 1) RespostaHttp(200, "{\"success\":false,\"erro\":\"assinatura invalida\"}")
+                return if (envios.size <= 2) RespostaHttp(200, "{\"success\":false,\"erro\":\"assinatura invalida\"}")
                 else RespostaHttp(200, "")
             }
         }
         val tarefa = Json.escrever(mapOf("mensagem" to "abc", "enviarPara" to "/api/login", "token" to "u1"))
         val r = processador(http).processar(requisicao("sso.autenticador", tarefa), ORIGEM)
         assertTrue(r.sucesso, r.mensagem)
-        assertEquals(2, envios.size, "deve enviar MD5 e, ao ser recusado, SHA-256")
+        assertEquals(3, envios.size, "deve tentar MD5, depois SHA-1 e, por fim, SHA-256")
         verificaAssinatura("MD5withRSA", "abc".toByteArray(), Json.lerObjeto(envios[0].toString(Charsets.UTF_8))["assinatura"] as String)
-        verificaAssinatura("SHA256withRSA", "abc".toByteArray(), Json.lerObjeto(envios[1].toString(Charsets.UTF_8))["assinatura"] as String)
+        verificaAssinatura("SHA1withRSA", "abc".toByteArray(), Json.lerObjeto(envios[1].toString(Charsets.UTF_8))["assinatura"] as String)
+        verificaAssinatura("SHA256withRSA", "abc".toByteArray(), Json.lerObjeto(envios[2].toString(Charsets.UTF_8))["assinatura"] as String)
+    }
+
+    @Test
+    fun `sso para no MD5 quando aceito e não sobrescreve com outro algoritmo`() {
+        // Regressão: "error" (substring de "erro") aparece em quase toda página
+        // HTML/JS; uma resposta 2xx assim NÃO pode disparar fallback, senão o 2º
+        // envio sobrescreve o MD5 já aceito (mesmo uuid) e quebra o login.
+        val envios = mutableListOf<ByteArray>()
+        val http = object : ClienteHttp {
+            override fun post(url: String, tipoConteudo: String, corpo: ByteArray, cabecalhos: Map<String, String>): RespostaHttp {
+                envios += corpo
+                return RespostaHttp(200, "<html><script>function onError(){}</script>ok</html>")
+            }
+        }
+        val tarefa = Json.escrever(mapOf("mensagem" to "abc", "enviarPara" to "/api/login", "token" to "u1"))
+        val r = processador(http).processar(requisicao("sso.autenticador", tarefa), ORIGEM)
+        assertTrue(r.sucesso, r.mensagem)
+        assertEquals(1, envios.size, "um 2xx com a palavra 'error' é sucesso, não deve haver fallback")
+        verificaAssinatura("MD5withRSA", "abc".toByteArray(), Json.lerObjeto(envios[0].toString(Charsets.UTF_8))["assinatura"] as String)
     }
 
     @Test

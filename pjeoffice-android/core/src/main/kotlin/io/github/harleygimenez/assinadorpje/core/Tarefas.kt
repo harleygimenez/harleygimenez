@@ -125,15 +125,25 @@ object TarefaSsoAutenticador : Tarefa {
             return resultadoSso(r, alg, outro = null)
         }
 
-        // "Two-check": o endpoint do SSO (/pjeoffice-rest) exige MD5withRSA
-        // (confirmado no cliente de referência: "Sign the message using MD5 with
-        // RSA (required by PJeOffice REST)"). Tentamos MD5 primeiro; só se ele
-        // NÃO autenticar é que enviamos com SHA-256, para não sobrescrever um MD5
-        // já aceito (o uuid do desafio é o mesmo nos dois envios).
-        val rMd5 = enviar(ctx, enviarPara, token, mensagem, certChain, "MD5withRSA")
-        if (ssoAceito(rMd5)) return resultadoSso(rMd5, "MD5withRSA", outro = null)
-        val rSha = enviar(ctx, enviarPara, token, mensagem, certChain, "SHA256withRSA")
-        return resultadoSso(rSha, "SHA256withRSA", outro = "MD5withRSA")
+        // "Two-check" (na verdade três): o endpoint do SSO (/pjeoffice-rest) usa,
+        // por padrão, MD5withRSA — confirmado no cliente de referência, cujo
+        // fallback é `.orElse(SignatureAlgorithm.MD5withRSA.getName())`. Os demais
+        // algoritmos suportados pela referência são SHA1withRSA e SHA256withRSA.
+        // Tentamos MD5 primeiro; só se ele NÃO autenticar é que tentamos os
+        // seguintes, nessa ordem, para não sobrescrever uma assinatura já aceita
+        // (o uuid do desafio é o mesmo em todos os envios).
+        val algoritmos = listOf("MD5withRSA", "SHA1withRSA", "SHA256withRSA")
+        var ultima: RespostaHttp? = null
+        val recusados = mutableListOf<String>()
+        for (alg in algoritmos) {
+            val r = enviar(ctx, enviarPara, token, mensagem, certChain, alg)
+            if (ssoAceito(r)) {
+                return resultadoSso(r, alg, outro = recusados.joinToString(", ").ifEmpty { null })
+            }
+            ultima = r
+            recusados += alg
+        }
+        return resultadoSso(ultima!!, algoritmos.last(), outro = recusados.dropLast(1).joinToString(", ").ifEmpty { null })
     }
 
     private fun enviar(
@@ -156,15 +166,19 @@ object TarefaSsoAutenticador : Tarefa {
         )
     }
 
-    /** O SSO aceitou? HTTP 2xx e sem marcas de erro no corpo (quando há corpo). */
+    /**
+     * O SSO aceitou? Exige HTTP 2xx. Antes olhávamos palavras soltas no corpo
+     * ("erro", "fail", "inval"...), mas "erro" é substring de "error" — presente
+     * em praticamente toda página HTML/JS — então uma resposta de sucesso era
+     * marcada como falha, disparando o próximo envio (SHA) que sobrescrevia o
+     * MD5 já aceito (mesmo uuid) e quebrava logins que funcionavam (TJRJ, CNJ).
+     * Agora só tratamos como recusa um marcador JSON inequívoco de falha; na
+     * dúvida, um 2xx é sucesso e nunca é sobrescrito.
+     */
     private fun ssoAceito(r: RespostaHttp): Boolean {
         if (!r.sucesso) return false
-        val c = r.corpo.lowercase()
-        val marcasDeErro = listOf(
-            "erro", "inval", "fail", "denied", "unauthor", "exception",
-            "\"success\":false", "não foi poss", "nao foi poss", "desativ",
-        )
-        return marcasDeErro.none { c.contains(it) }
+        val c = r.corpo.replace(Regex("\\s+"), "").lowercase()
+        return !c.contains("\"success\":false") && !c.contains("\"sucesso\":false")
     }
 
     private fun resultadoSso(r: RespostaHttp, algoritmo: String, outro: String?): Resultado {

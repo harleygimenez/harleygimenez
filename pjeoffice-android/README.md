@@ -14,7 +14,7 @@ App Android (APK) que faz no celular o papel do **PJeOffice Pro**: assina com o 
 | **TJRO** | 1º grau | ✅ | |
 | **TJ** (PJe) | — | ✅ | |
 | **CNJ — Corregedoria** | — | ✅ | |
-| **PJe SSO** (`sso.cloud.pje.jus.br`) | — | ✅ | `sso.autenticador` (SHA256withRSA) |
+| **PJe SSO** (`sso.cloud.pje.jus.br`) | — | ✅ | `sso.autenticador` (algoritmo da página; sem ele, *two-check* MD5 → SHA-1 → SHA-256) |
 
 > Onde um tribunal recusa com "Não foi possível validar o certificado", costuma ser **cadastro/primeiro acesso do certificado naquele sistema** (lado do servidor), não o app — a assinatura é válida e a cadeia está completa (confirme pelo *Diagnóstico do token*: `✔ Assinatura CONFERE`).
 
@@ -93,10 +93,17 @@ params.getAlgoritmoAssinatura()
 
 Este app segue a mesma regra: usa o `algoritmoAssinatura` da página quando ele
 vem, e **assume MD5withRSA** quando não vem (caso do SSO do **PDPJ/jus.br/SEEU**,
-cuja tarefa chega sem o campo). O login SSO (`sso.autenticador`) ainda faz um
-*two-check*: tenta MD5 e, se o servidor recusar, reenvia com SHA-256. O token A3
-e os certificados `.pfx` assinam MD5 (montamos o DigestInfo em software); o
-certificado do Android Keychain é a única exceção que não assina MD5.
+cuja tarefa chega sem o campo). Sem o campo, o login SSO (`sso.autenticador`)
+faz um *two-check* pelos três algoritmos que a referência suporta
+(`MD5withRSA`, `SHA1withRSA`, `SHA256withRSA`), **nessa ordem**: só reenvia com
+o próximo quando o servidor **recusa de fato** (HTTP de erro, ou JSON
+`"success":false`). Uma resposta `2xx` conta como aceita e nunca é
+sobrescrita — importante porque o `uuid` do desafio é o mesmo em todos os
+envios, então um segundo envio sobre um primeiro já aceito quebraria o login
+(regressão que ocorreu quando a verificação marcava como "erro" qualquer corpo
+contendo a palavra `error`). O token A3 e os certificados `.pfx` assinam MD5 e
+SHA-1 (montamos o DigestInfo em software); o certificado do Android Keychain é a
+exceção que não assina MD5.
 
 ### Cadeia de certificados (AC-OAB e ICP-Brasil)
 
