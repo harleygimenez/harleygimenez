@@ -212,14 +212,34 @@ class ProcessadorTest {
     }
 
     @Test
-    fun `sso sem algoritmo informado usa SHA256withRSA`() {
+    fun `sso sem algoritmo informado usa MD5withRSA`() {
+        // O endpoint /pjeoffice-rest do SSO exige MD5withRSA (confirmado no
+        // cliente de referência). Sem algoritmoAssinatura, usamos MD5withRSA.
         val http = ClienteHttpFalso()
-        // Requisição SSO sem o campo algoritmoAssinatura.
         val tarefa = Json.escrever(mapOf("mensagem" to "abc", "enviarPara" to "/api/login", "token" to "u1"))
         val r = processador(http).processar(requisicao("sso.autenticador", tarefa), ORIGEM)
         assertTrue(r.sucesso, r.mensagem)
         val corpo = Json.lerObjeto(http.envios.single().corpo)
-        verificaAssinatura("SHA256withRSA", "abc".toByteArray(), corpo["assinatura"] as String)
+        verificaAssinatura("MD5withRSA", "abc".toByteArray(), corpo["assinatura"] as String)
+    }
+
+    @Test
+    fun `sso tenta MD5 e faz fallback para SHA-256 quando o servidor recusa`() {
+        // Servidor recusa o 1º envio (MD5) e aceita o 2º (SHA-256).
+        val envios = mutableListOf<ByteArray>()
+        val http = object : ClienteHttp {
+            override fun post(url: String, tipoConteudo: String, corpo: ByteArray, cabecalhos: Map<String, String>): RespostaHttp {
+                envios += corpo
+                return if (envios.size == 1) RespostaHttp(200, "{\"success\":false,\"erro\":\"assinatura invalida\"}")
+                else RespostaHttp(200, "")
+            }
+        }
+        val tarefa = Json.escrever(mapOf("mensagem" to "abc", "enviarPara" to "/api/login", "token" to "u1"))
+        val r = processador(http).processar(requisicao("sso.autenticador", tarefa), ORIGEM)
+        assertTrue(r.sucesso, r.mensagem)
+        assertEquals(2, envios.size, "deve enviar MD5 e, ao ser recusado, SHA-256")
+        verificaAssinatura("MD5withRSA", "abc".toByteArray(), Json.lerObjeto(envios[0].toString(Charsets.UTF_8))["assinatura"] as String)
+        verificaAssinatura("SHA256withRSA", "abc".toByteArray(), Json.lerObjeto(envios[1].toString(Charsets.UTF_8))["assinatura"] as String)
     }
 
     @Test

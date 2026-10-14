@@ -117,21 +117,64 @@ object TarefaSsoAutenticador : Tarefa {
         val enviarPara = t.exigir("enviarPara")
         val mensagem = t.exigir("mensagem")
         val token = t.exigir("token")
-        // Padrão do login no SSO: SHA256withRSA (o cliente oficial do PJe usa
-        // esse), aceito por token A3 e por certificado do Android — ao
-        // contrário de MD5, que esses não assinam.
-        val algoritmo = t.texto("algoritmoAssinatura") ?: "SHA256withRSA"
+        val certChain = ctx.assinante.cadeiaPkiPathBase64()
+
+        // Se a página indicou o algoritmo, respeita e não faz fallback.
+        t.texto("algoritmoAssinatura")?.let { alg ->
+            val r = enviar(ctx, enviarPara, token, mensagem, certChain, alg)
+            return resultadoSso(r, alg, outro = null)
+        }
+
+        // "Two-check": o endpoint do SSO (/pjeoffice-rest) exige MD5withRSA
+        // (confirmado no cliente de referência: "Sign the message using MD5 with
+        // RSA (required by PJeOffice REST)"). Tentamos MD5 primeiro; só se ele
+        // NÃO autenticar é que enviamos com SHA-256, para não sobrescrever um MD5
+        // já aceito (o uuid do desafio é o mesmo nos dois envios).
+        val rMd5 = enviar(ctx, enviarPara, token, mensagem, certChain, "MD5withRSA")
+        if (ssoAceito(rMd5)) return resultadoSso(rMd5, "MD5withRSA", outro = null)
+        val rSha = enviar(ctx, enviarPara, token, mensagem, certChain, "SHA256withRSA")
+        return resultadoSso(rSha, "SHA256withRSA", outro = "MD5withRSA")
+    }
+
+    private fun enviar(
+        ctx: Contexto,
+        enviarPara: String,
+        token: String,
+        mensagem: String,
+        certChain: String,
+        algoritmo: String,
+    ): RespostaHttp {
         val assinatura = ctx.assinante.assinar(algoritmo, mensagem.toByteArray(Charsets.UTF_8))
-        val resposta = ctx.postJson(
+        return ctx.postJson(
             enviarPara,
             linkedMapOf(
                 "uuid" to token,
                 "mensagem" to mensagem,
                 "assinatura" to b64(assinatura),
-                "certChain" to ctx.assinante.cadeiaPkiPathBase64(),
+                "certChain" to certChain,
             ),
         )
-        return verificar(resposta, Verificacao.NENHUMA, "Login enviado ao tribunal")
+    }
+
+    /** O SSO aceitou? HTTP 2xx e sem marcas de erro no corpo (quando há corpo). */
+    private fun ssoAceito(r: RespostaHttp): Boolean {
+        if (!r.sucesso) return false
+        val c = r.corpo.lowercase()
+        val marcasDeErro = listOf(
+            "erro", "inval", "fail", "denied", "unauthor", "exception",
+            "\"success\":false", "não foi poss", "nao foi poss", "desativ",
+        )
+        return marcasDeErro.none { c.contains(it) }
+    }
+
+    private fun resultadoSso(r: RespostaHttp, algoritmo: String, outro: String?): Resultado {
+        val detalhe = r.corpo.trim().replace(Regex("\\s+"), " ").take(200)
+        val nota = if (outro != null) " ($algoritmo; $outro recusado)" else " ($algoritmo)"
+        return if (ssoAceito(r)) {
+            Resultado(true, "Login enviado ao tribunal$nota")
+        } else {
+            Resultado(false, "SSO recusou a autenticação$nota. Resposta: HTTP ${r.status}" + if (detalhe.isNotEmpty()) " — $detalhe" else "")
+        }
     }
 }
 
