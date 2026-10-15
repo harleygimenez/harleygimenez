@@ -23,15 +23,41 @@ import android.widget.Toast
 import io.github.harleygimenez.assinadorpje.core.Protocolo
 
 object Tribunais {
-    /** Endereços de exemplo; qualquer outro PJe pode ser digitado em "Outro endereço". */
-    val lista = listOf(
-        "TRF3 – 1º grau" to "https://pje1g.trf3.jus.br/pje/login.seam",
-        "TRF3 – 2º grau" to "https://pje2g.trf3.jus.br/pje/login.seam",
-        "TRF1 – 1º grau" to "https://pje1g.trf1.jus.br/pje/login.seam",
-        "TRT2 (SP) – 1º grau" to "https://pje.trt2.jus.br/primeirograu/login.seam",
-        "TJMG – 1º grau" to "https://pje.tjmg.jus.br/pje/login.seam",
-        "TJDFT – 1º grau" to "https://pje.tjdft.jus.br/pje/login.seam",
-    )
+    /**
+     * Endereços verificados (varredura em `ferramentas/probe-tribunais.ps1`).
+     * Cobrem os fluxos que o app suporta: SSO (realm `pje`) e clássico. Os que
+     * usam eproc/e-SAJ/Projudi ficam de fora (ver `docs/tribunais-autenticacao.md`).
+     * Qualquer outro endereço pode ser digitado em "Outro endereço".
+     */
+    val lista: List<Pair<String, String>> = buildList {
+        // --- Justiça Federal (SSO, realm pje) ---
+        add("TRF1 – 1º grau" to "https://pje1g.trf1.jus.br/pje/login.seam")
+        add("TRF1 – 2º grau" to "https://pje2g.trf1.jus.br/pje/login.seam")
+        add("TRF3 – 1º grau" to "https://pje1g.trf3.jus.br/pje/login.seam")
+        add("TRF3 – 2º grau" to "https://pje2g.trf3.jus.br/pje/login.seam")
+        add("TRF5 – 1º grau" to "https://pje.trf5.jus.br/pje/login.seam")
+        add("TRF5 – 2º grau" to "https://pje2g.trf5.jus.br/pje/login.seam")
+        add("TRF6 – 1º grau" to "https://pje1g.trf6.jus.br/pje/login.seam")
+        add("TRF6 – 2º grau" to "https://pje2g.trf6.jus.br/pje/login.seam")
+        // --- Justiça do Trabalho (clássico): TRT1 a TRT24, 1º e 2º grau ---
+        for (n in 1..24) {
+            add("TRT$n – 1º grau" to "https://pje.trt$n.jus.br/primeirograu/login.seam")
+            add("TRT$n – 2º grau" to "https://pje.trt$n.jus.br/segundograu/login.seam")
+        }
+        // --- Justiça Estadual em PJe (SSO, realm pje) ---
+        add("TJRJ – 1º grau" to "https://tjrj.pje.jus.br/1g/login.seam")
+        add("TJRJ – 2º grau" to "https://tjrj.pje.jus.br/2g/login.seam")
+        add("TJBA" to "https://pje.tjba.jus.br/pje/login.seam")
+        add("TJDFT" to "https://pje.tjdft.jus.br/pje/login.seam")
+        add("TJMA" to "https://pje.tjma.jus.br/pje/login.seam")
+        add("TJMT" to "https://pje.tjmt.jus.br/pje/login.seam")
+        add("TJMG" to "https://pje.tjmg.jus.br/pje/login.seam")
+        add("TJPA" to "https://pje.tjpa.jus.br/pje/login.seam")
+        add("TJPB" to "https://pje.tjpb.jus.br/pje/login.seam")
+        add("TJPE" to "https://pje.tjpe.jus.br/pje/login.seam")
+        // --- Nacional ---
+        add("PDPJ / jus.br" to "https://portaldeservicos.pdpj.jus.br/")
+    }
 }
 
 class MainActivity : Activity() {
