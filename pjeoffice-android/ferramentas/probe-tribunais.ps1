@@ -13,36 +13,52 @@
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) probe-pje/1.0"
 
-$alvos = @(
-  # --- Federais ---
-  @{ nome = "TRF1 1g"; url = "https://pje1g.trf1.jus.br/pje/login.seam" }
-  @{ nome = "TRF1 2g"; url = "https://pje2g.trf1.jus.br/pje/login.seam" }
-  @{ nome = "TRF2";    url = "https://pje.trf2.jus.br/pje/login.seam" }
-  @{ nome = "TRF3 1g"; url = "https://pje1g.trf3.jus.br/pje/login.seam" }
-  @{ nome = "TRF3 2g"; url = "https://pje2g.trf3.jus.br/pje/login.seam" }
-  @{ nome = "TRF4";    url = "https://pje.trf4.jus.br/pje/login.seam" }
-  @{ nome = "TRF5";    url = "https://pje.trf5.jus.br/pje/login.seam" }
-  @{ nome = "TRF6 1g"; url = "https://pje1g.trf6.jus.br/pje/login.seam" }
-  # --- Superiores / nacionais ---
-  @{ nome = "TST";     url = "https://pje.tst.jus.br/primeirograu/login.seam" }
-  @{ nome = "SEEU";    url = "https://seeu.pje.jus.br/seeu/" }
-  @{ nome = "PDPJ/jus.br"; url = "https://portaldeservicos.pdpj.jus.br/" }
-  # --- Trabalho (amostra; ajuste trtN conforme precisar) ---
-  @{ nome = "TRT1 (RJ) 1g"; url = "https://pje.trt1.jus.br/primeirograu/login.seam" }
-  @{ nome = "TRT2 (SP) 1g"; url = "https://pje.trt2.jus.br/primeirograu/login.seam" }
-  @{ nome = "TRT3 (MG) 1g"; url = "https://pje.trt3.jus.br/primeirograu/login.seam" }
-  @{ nome = "TRT4 (RS) 1g"; url = "https://pje.trt4.jus.br/primeirograu/login.seam" }
-  @{ nome = "TRT15 (CAMP) 1g"; url = "https://pje.trt15.jus.br/primeirograu/login.seam" }
-  # --- Estaduais (amostra) ---
-  @{ nome = "TJMG 1g"; url = "https://pje.tjmg.jus.br/pje/login.seam" }
-  @{ nome = "TJDFT 1g"; url = "https://pje.tjdft.jus.br/pje/login.seam" }
-  @{ nome = "TJRJ 1g"; url = "https://tjrj.pje.jus.br/1g/login.seam" }
-  @{ nome = "TJRJ 2g"; url = "https://tjrj.pje.jus.br/2g/login.seam" }
-  @{ nome = "TJBA 1g"; url = "https://pje.tjba.jus.br/pje/login.seam" }
-  @{ nome = "TJPE 1g"; url = "https://pje.tjpe.jus.br/1g/login.seam" }
-  @{ nome = "TJCE 1g"; url = "https://pje.tjce.jus.br/pje1grau/login.seam" }
-  @{ nome = "TJRS (eproc)"; url = "https://eproc1g.tjrs.jus.br/eproc/" }
-)
+# A lista e gerada por padrao (loops) para cobrir o pais todo. As URLs sao a
+# melhor aproximacao dos padroes conhecidos; a varredura marca o que nao resolve
+# (coluna obs/http), entao e so corrigir a URL de quem aparecer com erro.
+$alvos = @()
+function Alvo($nome, $url) { $script:alvos += @{ nome = $nome; url = $url } }
+
+# --- Justica Federal (TRFs) — 1a e 2a instancia ---
+Alvo "TRF1 1g" "https://pje1g.trf1.jus.br/pje/login.seam"
+Alvo "TRF1 2g" "https://pje2g.trf1.jus.br/pje/login.seam"
+Alvo "TRF2 1g" "https://pje.trf2.jus.br/pje/login.seam"
+Alvo "TRF2 2g" "https://pje2g.trf2.jus.br/pje/login.seam"
+Alvo "TRF3 1g" "https://pje1g.trf3.jus.br/pje/login.seam"
+Alvo "TRF3 2g" "https://pje2g.trf3.jus.br/pje/login.seam"
+Alvo "TRF4 1g (eproc)" "https://eproc1g.trf4.jus.br/eproc/"
+Alvo "TRF4 2g (eproc)" "https://eproc2g.trf4.jus.br/eproc/"
+Alvo "TRF5 1g" "https://pje.trf5.jus.br/pje/login.seam"
+Alvo "TRF5 2g" "https://pje2g.trf5.jus.br/pje/login.seam"
+Alvo "TRF6 1g" "https://pje1g.trf6.jus.br/pje/login.seam"
+Alvo "TRF6 2g" "https://pje2g.trf6.jus.br/pje/login.seam"
+
+# --- Justica do Trabalho: TST + 24 TRTs (primeiro e segundo grau) ---
+Alvo "TST 1g" "https://pje.tst.jus.br/primeirograu/login.seam"
+Alvo "TST 2g" "https://pje.tst.jus.br/segundograu/login.seam"
+1..24 | ForEach-Object {
+  Alvo "TRT$_ 1g" "https://pje.trt$_.jus.br/primeirograu/login.seam"
+  Alvo "TRT$_ 2g" "https://pje.trt$_.jus.br/segundograu/login.seam"
+}
+
+# --- Justica Estadual (TJs) que usam PJe no padrao pje.tjXX.jus.br/pje ---
+$tjsPje = "ac","al","ap","am","ba","ce","dft","es","ma","mt","ms","mg","pa","pb","pe","pi","rn","ro","rr","se","to"
+$tjsPje | ForEach-Object { Alvo ("TJ" + $_.ToUpper()) "https://pje.tj$_.jus.br/pje/login.seam" }
+
+# --- TJs com host/instancia diferente ou outro sistema (eproc/esaj/projudi) ---
+Alvo "TJRJ 1g" "https://tjrj.pje.jus.br/1g/login.seam"
+Alvo "TJRJ 2g" "https://tjrj.pje.jus.br/2g/login.seam"
+Alvo "TJRS 1g (eproc)" "https://eproc1g.tjrs.jus.br/eproc/"
+Alvo "TJRS 2g (eproc)" "https://eproc2g.tjrs.jus.br/eproc/"
+Alvo "TJSC 1g (eproc)" "https://eproc1g.tjsc.jus.br/eproc/"
+Alvo "TJSP (esaj)" "https://esaj.tjsp.jus.br/esaj/portal.do"
+Alvo "TJPR (projudi)" "https://projudi.tjpr.jus.br/projudi/"
+Alvo "TJGO (projudi)" "https://projudi.tjgo.jus.br/"
+
+# --- Nacionais / superiores ---
+Alvo "SEEU" "https://seeu.pje.jus.br/seeu/"
+Alvo "PDPJ/jus.br" "https://portaldeservicos.pdpj.jus.br/"
+Alvo "SSO PJe (cloud)" "https://sso.cloud.pje.jus.br/auth/realms/pje/account/"
 
 $resultados = @()
 
