@@ -105,6 +105,19 @@ contendo a palavra `error`). O token A3 e os certificados `.pfx` assinam MD5 e
 SHA-1 (montamos o DigestInfo em software); o certificado do Android Keychain é a
 exceção que não assina MD5.
 
+### Teste A/B: POST do login SSO pela página (modo "navegador")
+
+Em *Diagnóstico do token* há a chave **"SSO: enviar login pelo navegador (teste)"**.
+No padrão (desligada), o app faz o POST do login SSO ele mesmo (POST nativo), como
+o `PjeWebClient` do PjeOffice clássico. Ligada, o POST é feito pela **própria
+página**, via um `fetch` com `credentials: 'include'` — assim a chamada leva os
+cookies do keycloak, o `origin` e as credenciais do navegador, como no PjeOffice
+Pro em modo extensão (que devolve `{endPoint, pojo}` para a página enviar).
+
+Serve para testar a hipótese do erro "não foi possível validar o certificado" no
+PDPJ/jus.br: se o SSO só aceita a chamada vinda do contexto do navegador. Só afeta
+o login SSO (`sso.autenticador`); recarregue a página depois de mudar a chave.
+
 ### Cadeia de certificados (AC-OAB e ICP-Brasil)
 
 O PJe espera a cadeia do certificado (folha + ACs + raiz). Quando o certificado traz só a folha, o app **completa a cadeia pela rede**: cada certificado ICP-Brasil aponta, no campo AIA, a URL do certificado do emissor no repositório do ITI, então o app segue essas URLs e monta a cadeia inteira (folha → AC-OAB de 2º nível → CAs acima → raiz) sozinho, sem precisar embutir certificados no app. Para o token A3, que já devolve a cadeia completa, nada é baixado. Os certificados baixados ficam em cache na memória.

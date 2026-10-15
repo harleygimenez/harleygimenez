@@ -27,10 +27,16 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.Toast
+import io.github.harleygimenez.assinadorpje.core.EnvioNavegador
+import io.github.harleygimenez.assinadorpje.core.Json
 import io.github.harleygimenez.assinadorpje.core.Processador
+import io.github.harleygimenez.assinadorpje.core.RespostaHttp
 import io.github.harleygimenez.assinadorpje.core.RespostaPje
 import io.github.harleygimenez.assinadorpje.core.ServidorLocal
 import java.io.ByteArrayInputStream
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * Navegador do PJe com o assinador embutido: as chamadas da página para
@@ -61,6 +67,9 @@ class PjeWebActivity : Activity() {
             confirmador = ConfirmadorNaTela(this),
             registro = app.registro,
             cookiesPara = { servidor -> CookieManager.getInstance().getCookie(servidor) },
+            // Chave A/B (Diagnóstico do token): quando ligada, o POST do login SSO
+            // é feito pela própria página (navegador), não pelo POST nativo.
+            envioNavegador = { if (Preferencias.postPeloNavegador(this)) transporteNavegador else null },
         )
 
         // Esconde a barra de cima (ActionBar): ela tampava o painel do tribunal.
@@ -82,6 +91,9 @@ class PjeWebActivity : Activity() {
             loadWithOverviewMode = true
             agentePadrao = userAgentString
         }
+        // Ponte para o modo de teste "SSO pelo navegador": o fetch da página
+        // devolve o resultado por aqui. Inofensiva quando a chave está desligada.
+        web.addJavascriptInterface(PonteNavegador(), NOME_PONTE)
         web.webViewClient = Cliente()
         web.webChromeClient = object : WebChromeClient() {
             override fun onReceivedTitle(view: WebView, title: String?) {
@@ -248,6 +260,56 @@ class PjeWebActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
+    // --- Modo de teste: POST do login SSO feito pela página (navegador) --------------------
+
+    private val postsNavegador = ConcurrentHashMap<String, ArrayBlockingQueue<RespostaHttp>>()
+
+    /**
+     * Transporte alternativo do SSO: injeta um `fetch` na página (contexto do
+     * navegador — cookies, origin e credenciais do keycloak) e espera, de forma
+     * bloqueante, a resposta voltar pela [PonteNavegador]. Roda na thread do
+     * interceptador (não é a thread de UI), então pode bloquear sem travar a página.
+     */
+    private val transporteNavegador = EnvioNavegador { url, corpoJson ->
+        val id = java.util.UUID.randomUUID().toString()
+        val fila = ArrayBlockingQueue<RespostaHttp>(1)
+        postsNavegador[id] = fila
+        try {
+            val cfg = Json.escrever(linkedMapOf("id" to id, "url" to url, "corpo" to corpoJson))
+            runOnUiThread { web.evaluateJavascript(scriptFetch(cfg), null) }
+            fila.poll(60, TimeUnit.SECONDS)
+                ?: RespostaHttp(0, "Tempo esgotado aguardando o navegador enviar o login.")
+        } finally {
+            postsNavegador.remove(id)
+        }
+    }
+
+    private fun scriptFetch(cfg: String): String = """
+        (function(){
+          try {
+            var c = $cfg;
+            fetch(c.url, {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json; charset=UTF-8', 'Accept': 'application/json' },
+              body: c.corpo
+            }).then(function(r){
+              return r.text().then(function(t){ $NOME_PONTE.entregar(c.id, r.status, t); });
+            }).catch(function(e){
+              try { $NOME_PONTE.entregar(c.id, 0, 'fetch falhou: ' + (e && e.message ? e.message : e)); } catch(_) {}
+            });
+          } catch(e) {}
+        })();
+    """.trimIndent()
+
+    /** Recebe o resultado do fetch feito pela página (modo de teste A/B). */
+    private inner class PonteNavegador {
+        @android.webkit.JavascriptInterface
+        fun entregar(id: String, status: Int, corpo: String?) {
+            postsNavegador[id]?.offer(RespostaHttp(status, corpo ?: ""))
+        }
+    }
+
     private fun baixar(url: String, userAgent: String, contentDisposition: String?, mimetype: String?) {
         if (!url.startsWith("http")) {
             Toast.makeText(this, "Este tipo de download não é suportado no navegador embutido", Toast.LENGTH_LONG).show()
@@ -341,6 +403,7 @@ class PjeWebActivity : Activity() {
         const val EXTRA_URL = "url"
         private const val PEDIDO_ARQUIVO = 10
         private const val PEDIDO_LOCALIZACAO = 11
+        private const val NOME_PONTE = "AssinadorPjeNativo"
         private const val MENU_RECARREGAR = 1
         private const val MENU_COMPUTADOR = 2
         private const val MENU_INICIO = 3

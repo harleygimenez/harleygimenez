@@ -263,6 +263,27 @@ class ProcessadorTest {
     }
 
     @Test
+    fun `sso usa o transporte do navegador quando presente, sem POST nativo`() {
+        val http = ClienteHttpFalso()
+        val vistos = mutableListOf<Pair<String, String>>()
+        val proc = Processador(
+            confirmador = { CertificadoTeste.assinante },
+            http = http,
+            cookiesPara = { null },
+            envioNavegador = { EnvioNavegador { url, corpo -> vistos += url to corpo; RespostaHttp(200, "") } },
+        )
+        val tarefa = Json.escrever(mapOf("mensagem" to "abc", "enviarPara" to "/api/login", "token" to "u1"))
+        val r = proc.processar(requisicao("sso.autenticador", tarefa), ORIGEM)
+        assertTrue(r.sucesso, r.mensagem)
+        assertTrue(http.envios.isEmpty(), "com transporte de navegador não deve haver POST nativo")
+        assertEquals(1, vistos.size, "deve enviar uma vez, pela página")
+        assertEquals("$SERVIDOR/api/login", vistos[0].first)
+        val corpo = Json.lerObjeto(vistos[0].second)
+        assertEquals("u1", corpo["uuid"])
+        verificaAssinatura("MD5withRSA", "abc".toByteArray(), corpo["assinatura"] as String)
+    }
+
+    @Test
     fun `cnj autenticador usa MD5withRSA e formulário`() {
         val http = ClienteHttpFalso()
         val tarefa = Json.escrever(mapOf("mensagem" to "abc", "enviarPara" to "/logar.seam"))

@@ -114,6 +114,11 @@ class Processador(
     private val tarefas: Map<String, Tarefa> = Tarefas.conhecidas,
     /** Cookies do navegador embutido para o servidor, quando houver. */
     private val cookiesPara: (String) -> String? = { null },
+    /**
+     * Transporte alternativo para o SSO (POST feito pela página). Avaliado a
+     * cada requisição para refletir a chave A/B em tempo real; `null` = POST nativo.
+     */
+    private val envioNavegador: () -> EnvioNavegador? = { null },
 ) {
     private val ocupado = AtomicBoolean(false)
 
@@ -155,7 +160,7 @@ class Processador(
             return Resultado(false, "Erro ao obter o certificado: ${e.message}")
         } ?: return Resultado(false, "Cancelado pelo usuário")
         return try {
-            tarefa.executar(Contexto(requisicao, assinante, http, cookiesPara(requisicao.servidor)))
+            tarefa.executar(Contexto(requisicao, assinante, http, cookiesPara(requisicao.servidor), envioNavegador()))
         } catch (e: ErroTarefa) {
             Resultado(false, e.message ?: "Erro na tarefa")
         } catch (e: Exception) {

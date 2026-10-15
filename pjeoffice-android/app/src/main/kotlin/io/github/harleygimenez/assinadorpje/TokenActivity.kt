@@ -61,6 +61,7 @@ class TokenActivity : Activity() {
         botaoAssinar = Ui.botao(this, "Testar assinatura (pede o PIN)") { avisarEAssinar() }
             .also { raiz.addView(it) }
         raiz.addView(Ui.botao(this, "Usar este token para assinar no PJe") { usarNoPje() })
+        raiz.addView(construirChavePostNavegador())
         raiz.addView(Ui.botao(this, "Copiar log técnico") {
             getSystemService(android.content.ClipboardManager::class.java)
                 ?.setPrimaryClip(android.content.ClipData.newPlainText("log token", log.texto()))
@@ -82,6 +83,39 @@ class TokenActivity : Activity() {
         } catch (_: Exception) {
         }
         super.onDestroy()
+    }
+
+    /** Chave A/B: faz o POST do login SSO pela página (navegador) em vez do POST nativo. */
+    private fun construirChavePostNavegador(): android.view.View {
+        val coluna = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, Ui.dp(this@TokenActivity, 14), 0, 0)
+        }
+        @Suppress("DEPRECATION")
+        val chave = android.widget.Switch(this).apply {
+            text = "SSO: enviar login pelo navegador (teste)"
+            textSize = 14f
+            isChecked = Preferencias.postPeloNavegador(this@TokenActivity)
+            setOnCheckedChangeListener { _, ligado ->
+                Preferencias.definirPostPeloNavegador(this@TokenActivity, ligado)
+                android.widget.Toast.makeText(
+                    this@TokenActivity,
+                    if (ligado) "SSO pelo navegador (ligado)" else "SSO pelo POST nativo (padrão)",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+        coluna.addView(chave)
+        coluna.addView(
+            Ui.texto(
+                this,
+                "Ligado: o POST do login SSO é feito pela própria página (com os cookies e o " +
+                    "origin do navegador), como no PjeOffice Pro. Desligado (padrão): POST nativo " +
+                    "do app. Só afeta o login SSO; recarregue a página depois de mudar.",
+                Ui.CINZA, 12f,
+            )
+        )
+        return coluna
     }
 
     private fun escrever(linha: String) {

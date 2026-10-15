@@ -16,12 +16,26 @@ object Protocolo {
 
 data class Resultado(val sucesso: Boolean, val mensagem: String)
 
+/**
+ * Transporte alternativo: em vez de o app fazer o POST (nativo), pede que o
+ * POST seja feito pela PÁGINA, no contexto do navegador embutido (um `fetch`
+ * com `credentials: 'include'`), como no PjeOffice Pro em modo extensão. Serve
+ * para testar se o SSO do keycloak aceita melhor a chamada vinda do navegador.
+ * Devolve a resposta igual a um POST nativo, então o fluxo não muda.
+ */
+fun interface EnvioNavegador {
+    /** Faz o POST pela página (bloqueante) e devolve a resposta HTTP. */
+    fun postar(url: String, corpoJson: String): RespostaHttp
+}
+
 class Contexto(
     val requisicao: Requisicao,
     val assinante: Assinante,
     val http: ClienteHttp,
     /** Cookies do navegador embutido (inclui os HttpOnly, que o JS da página não enxerga). */
     val cookiesNavegador: String? = null,
+    /** Quando presente, o SSO envia pela página em vez de pelo POST nativo. */
+    val envioNavegador: EnvioNavegador? = null,
 ) {
     /** Como `AstractPjeClient.createOutput`: `Cookie` = sessão e `versao`. */
     fun cabecalhos(extras: Map<String, String> = emptyMap()): Map<String, String> {
@@ -155,15 +169,16 @@ object TarefaSsoAutenticador : Tarefa {
         algoritmo: String,
     ): RespostaHttp {
         val assinatura = ctx.assinante.assinar(algoritmo, mensagem.toByteArray(Charsets.UTF_8))
-        return ctx.postJson(
-            enviarPara,
-            linkedMapOf(
-                "uuid" to token,
-                "mensagem" to mensagem,
-                "assinatura" to b64(assinatura),
-                "certChain" to certChain,
-            ),
+        val corpo = linkedMapOf(
+            "uuid" to token,
+            "mensagem" to mensagem,
+            "assinatura" to b64(assinatura),
+            "certChain" to certChain,
         )
+        // Modo de teste A/B: deixa a própria página fazer o POST (contexto do
+        // navegador: cookies do keycloak, origin, credenciais). Senão, POST nativo.
+        ctx.envioNavegador?.let { return it.postar(ctx.requisicao.resolver(enviarPara), Json.escrever(corpo)) }
+        return ctx.postJson(enviarPara, corpo)
     }
 
     /**
